@@ -1,6 +1,7 @@
 // ページの読み込みが完了したら実行
 document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('canvas-container');
+    const GRID_SIZE = 20; // 方眼のサイズを定数で管理
 
     // コンテナがクリックされた時の処理
     container.addEventListener('click', (event) => {
@@ -12,8 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 existingTextarea.blur(); // blurイベントを強制的に発火
                 return; // 新しい入力エリアは作らない
             }
-            // クリックされた位置に新しい入力エリアを作成
-            createTemporaryTextarea(event.pageX, event.pageY);
+            
+            //【重要】クリック座標をグリッドにスナップさせる
+            const snappedX = Math.round(event.pageX / GRID_SIZE) * GRID_SIZE;
+            const snappedY = Math.round(event.pageY / GRID_SIZE) * GRID_SIZE;
+
+            // スナップされた座標を使って新しい入力エリアを作成
+            createTemporaryTextarea(snappedX, snappedY);
         }
     });
 
@@ -30,23 +36,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // テキストエリアからフォーカスが外れたら（入力が終わったら）
         textarea.addEventListener('blur', () => {
-            // 入力されたテキストが空でなければ、固定テキストを作成
             if (textarea.value.trim() !== '') {
                 createTextElement(textarea.value, x, y);
             }
-            // 入力エリア自身は削除する
             container.removeChild(textarea);
         });
 
         // Enterキーで入力を確定（Shift+Enterで改行）
         textarea.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault(); // デフォルトの改行を防ぐ
-                textarea.blur(); // フォーカスを外して入力を確定させる
+                e.preventDefault();
+                textarea.blur();
             }
         });
+        
+        // 入力に合わせてテキストエリアが自動で伸びるようにする
+        textarea.addEventListener('input', () => {
+            textarea.style.height = 'auto';
+            textarea.style.height = `${textarea.scrollHeight}px`;
+            textarea.style.width = 'auto';
+            textarea.style.width = `${textarea.scrollWidth}px`;
+        });
 
-        // 作成したテキストエリアをコンテナに追加し、すぐにフォーカスする
         container.appendChild(textarea);
         textarea.focus();
     }
@@ -58,25 +69,20 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {number} y - 画面の上からの位置 (px)
      */
     function createTextElement(text, x, y) {
-        // テキスト全体を囲む親コンテナを作成
         const textElement = document.createElement('div');
         textElement.classList.add('text-element');
         textElement.style.left = `${x}px`;
         textElement.style.top = `${y}px`;
 
-        // 入力されたテキストを1文字ずつの配列に分解
         const chars = text.split('');
 
-        // 各文字に対して処理を実行
         chars.forEach(char => {
             if (char === '\n') {
-                // もし改行文字なら、改行を表現するための要素を追加
                 const br = document.createElement('div');
-                br.style.flexBasis = '100%'; // 親要素の幅全体を使って改行させる
+                br.style.flexBasis = '100%';
                 br.style.height = '0';
                 textElement.appendChild(br);
             } else {
-                // 通常の文字なら、1文字を入れるための箱を作成
                 const charBox = document.createElement('div');
                 charBox.classList.add('char-box');
                 charBox.innerText = char;
