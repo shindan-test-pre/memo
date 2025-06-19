@@ -2,19 +2,33 @@
     box-sizing: border-box;
 }
 
-body {
+/* htmlとbodyを画面全体に広げ、基準とする */
+html, body {
+    height: 100%;
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+    /* ページの背景（机の色）を設定 */
+    background-color: #f0f0f0; 
+    /* 上下左右に余白を作成 */
+    padding: 40px; 
     overflow: hidden; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 #canvas-container {
+    /* bodyのpaddingの内側いっぱいに広がるように設定 */
+    width: 100%;
+    height: 100%;
+    
     position: relative;
-    width: 100vw;
-    height: 100vh;
     overflow: auto;
     cursor: text;
     background-color: #fdfdfd;
+    /* 用紙に影をつけて、少し浮いているように見せる */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+
     background-image:
         linear-gradient(rgba(0, 0, 0, 0.12) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0, 0, 0, 0.12) 1px, transparent 1px);
@@ -31,7 +45,6 @@ body {
     user-select: none;
 }
 
-/* 【NEW】変換中の文字に適用するスタイル */
 .composing-char {
     text-decoration: underline;
     text-decoration-thickness: 1px;
@@ -40,7 +53,7 @@ body {
 
 .cursor {
     position: absolute;
-    width: 2px; /* カーソルを細く変更 */
+    width: 2px;
     height: 20px;
     background-color: #007bff;
     animation: blink 1s step-end infinite;
