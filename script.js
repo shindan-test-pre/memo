@@ -52,17 +52,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * 入力が確定したテキストを画面に配置する関数
+     * 入力が確定したテキストを1文字ずつ分解し、マス目に配置する関数
      * @param {string} text - 入力された文字列
      * @param {number} x - 画面の左からの位置 (px)
      * @param {number} y - 画面の上からの位置 (px)
      */
     function createTextElement(text, x, y) {
+        // テキスト全体を囲む親コンテナを作成
         const textElement = document.createElement('div');
         textElement.classList.add('text-element');
         textElement.style.left = `${x}px`;
         textElement.style.top = `${y}px`;
-        textElement.innerText = text; // innerTextを使ってテキストを安全に設定
+
+        // 入力されたテキストを1文字ずつの配列に分解
+        const chars = text.split('');
+
+        // 各文字に対して処理を実行
+        chars.forEach(char => {
+            if (char === '\n') {
+                // もし改行文字なら、改行を表現するための要素を追加
+                const br = document.createElement('div');
+                br.style.flexBasis = '100%'; // 親要素の幅全体を使って改行させる
+                br.style.height = '0';
+                textElement.appendChild(br);
+            } else {
+                // 通常の文字なら、1文字を入れるための箱を作成
+                const charBox = document.createElement('div');
+                charBox.classList.add('char-box');
+                charBox.innerText = char;
+                textElement.appendChild(charBox);
+            }
+        });
 
         container.appendChild(textElement);
     }
