@@ -1,55 +1,50 @@
-// script.js (最終版)
-
-// ページの読み込みが完了したら実行
 document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('canvas-container');
-    const GRID_SIZE = 20; // 方眼のサイズを定数で管理
+    const GRID_SIZE = 20;
 
-    // コンテナがクリックされた時の処理
+    // 新規作成：何もない場所をクリックした時の処理
     container.addEventListener('click', (event) => {
-        // クリックされたのがコンテナ自身（他のテキスト上ではない）の場合のみ実行
         if (event.target.id === 'canvas-container') {
             const existingTextarea = document.querySelector('.temp-textarea');
             if (existingTextarea) {
-                existingTextarea.blur(); // blurイベントを強制的に発火
-                return; // 新しい入力エリアは作らない
+                existingTextarea.blur();
+                return;
             }
-            
-            //【新しい正確な座標計算】
-            // 1. 方眼紙エリアの画面上の絶対位置とサイズを取得
             const rect = container.getBoundingClientRect();
-
-            // 2. クリックされた位置から、方眼紙エリアの左上の位置を引く
-            //    container.scrollLeft/Top を足すことで、コンテナ内のスクロール量も考慮する
             const x = event.clientX - rect.left + container.scrollLeft;
             const y = event.clientY - rect.top + container.scrollTop;
-
-            // 3. 算出した相対座標を、最も近いグリッドにスナップさせる
             const snappedX = Math.round(x / GRID_SIZE) * GRID_SIZE;
             const snappedY = Math.round(y / GRID_SIZE) * GRID_SIZE;
-
-            // スナップされた座標を使って新しい入力エリアを作成
             createTemporaryTextarea(snappedX, snappedY);
         }
     });
 
     /**
-     * 指定した位置に一時的なテキスト入力エリアを作成する関数
-     * @param {number} x - 画面の左からの位置 (px)
-     * @param {number} y - 画面の上からの位置 (px)
+     * テキスト入力エリアを作成する（新規・編集兼用）
+     * @param {number} x - 位置(left)
+     * @param {number} y - 位置(top)
+     * @param {string} [initialValue=''] - 初期値（編集時に使用）
      */
-    function createTemporaryTextarea(x, y) {
+    function createTemporaryTextarea(x, y, initialValue = '') {
         const textarea = document.createElement('textarea');
         textarea.classList.add('temp-textarea');
+        textarea.value = initialValue;
         textarea.style.left = `${x}px`;
         textarea.style.top = `${y}px`;
+        
+        // 【UI改善】背景の方眼がズレないように位置を調整
+        textarea.style.backgroundPosition = `-${x % GRID_SIZE}px -${y % GRID_SIZE}px`;
 
-        textarea.addEventListener('blur', () => {
+        const onBlur = () => {
             if (textarea.value.trim() !== '') {
                 createTextElement(textarea.value, x, y);
             }
-            container.removeChild(textarea);
-        });
+            // 親要素からtextareaを削除（存在確認も行う）
+            if (textarea.parentElement) {
+                textarea.parentElement.removeChild(textarea);
+            }
+        };
+        textarea.addEventListener('blur', onBlur);
 
         textarea.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -58,22 +53,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        textarea.addEventListener('input', () => {
+        const adjustTextareaSize = () => {
             textarea.style.height = 'auto';
-            textarea.style.height = `${textarea.scrollHeight}px`;
             textarea.style.width = 'auto';
-            textarea.style.width = `${textarea.scrollWidth}px`;
-        });
+            // 最低でもGRID_SIZE分の幅と高さを確保
+            textarea.style.height = `${Math.max(textarea.scrollHeight, GRID_SIZE)}px`;
+            textarea.style.width = `${Math.max(textarea.scrollWidth, GRID_SIZE)}px`;
+        };
+        textarea.addEventListener('input', adjustTextareaSize);
 
         container.appendChild(textarea);
         textarea.focus();
+        // 初期値がある場合、初期表示のサイズを調整
+        if (initialValue) {
+            adjustTextareaSize();
+        }
     }
 
     /**
-     * 入力が確定したテキストを1文字ずつ分解し、マス目に配置する関数
-     * @param {string} text - 入力された文字列
-     * @param {number} x - 画面の左からの位置 (px)
-     * @param {number} y - 画面の上からの位置 (px)
+     * 確定したテキストブロックを画面に配置する
      */
     function createTextElement(text, x, y) {
         const textElement = document.createElement('div');
@@ -81,22 +79,43 @@ document.addEventListener('DOMContentLoaded', () => {
         textElement.style.left = `${x}px`;
         textElement.style.top = `${y}px`;
 
-        const chars = text.split('');
+        // テキスト内容を保持させておく（編集時に利用）
+        textElement.dataset.text = text;
 
+        const chars = text.split('');
         chars.forEach(char => {
+            const charBox = document.createElement('div');
+            charBox.classList.add('char-box');
             if (char === '\n') {
-                const br = document.createElement('div');
-                br.style.flexBasis = '100%';
-                br.style.height = '0';
-                textElement.appendChild(br);
+                charBox.style.flexBasis = '100%';
+                charBox.style.height = '0';
             } else {
-                const charBox = document.createElement('div');
-                charBox.classList.add('char-box');
                 charBox.innerText = char;
-                textElement.appendChild(charBox);
             }
+            textElement.appendChild(charBox);
+        });
+
+        // 【編集機能】ダブルクリックで編集モードに入る
+        textElement.addEventListener('dblclick', (e) => {
+            e.stopPropagation(); // 親コンテナへのイベント伝播を停止
+            enterEditMode(textElement);
         });
 
         container.appendChild(textElement);
+    }
+
+    /**
+     * 編集モードを開始する
+     * @param {HTMLElement} textElement - 編集対象のテキストブロック
+     */
+    function enterEditMode(textElement) {
+        const text = textElement.dataset.text;
+        const x = parseInt(textElement.style.left, 10);
+        const y = parseInt(textElement.style.top, 10);
+
+        // 元のテキストブロックを削除
+        textElement.parentElement.removeChild(textElement);
+        // 同じ場所に同じ内容で入力エリアを作成
+        createTemporaryTextarea(x, y, text);
     }
 });
