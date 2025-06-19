@@ -92,33 +92,30 @@ document.addEventListener('DOMContentLoaded', () => {
             height: y2 - y1 + GRID_SIZE,
         };
     }
-    
-    // 【NEW】行のデータを再構築する方式に全面変更
-    function rebaseLine(y, cursorIndex, textToInsert = '') {
-        // 1. 対象行の文字をすべて取得し、x座標でソート
+
+    // 【修正】文字の挿入・削除を両方扱える、より堅牢な関数に改良
+    function operateOnLine(y, startIndex, deleteCount, textToInsert = '') {
         const lineChars = Object.keys(paperData)
             .map(key => ({ key, x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) }))
             .filter(item => item.y === y)
             .sort((a, b) => a.x - b.x);
 
-        // 2. 行の文字列を再構築
         let lineText = lineChars.map(item => paperData[item.key]).join('');
         
-        // 3. 文字列に新しい文字を挿入
-        const charIndex = Math.floor(cursorIndex / GRID_SIZE);
-        lineText = lineText.slice(0, charIndex) + textToInsert + lineText.slice(charIndex);
+        const charIndex = Math.floor(startIndex / GRID_SIZE);
+        const textArray = lineText.split('');
+        textArray.splice(charIndex, deleteCount, ...textToInsert.split(''));
+        lineText = textArray.join('');
 
-        // 4. 対象行の古いデータをすべて削除
         lineChars.forEach(item => delete paperData[item.key]);
 
-        // 5. 新しい文字列でデータを再構築
         for (let i = 0; i < lineText.length; i++) {
             const char = lineText[i];
             const newKey = `${i * GRID_SIZE},${y}`;
             paperData[newKey] = char;
         }
     }
-
+    
     // --- イベントリスナー ---
     
     container.addEventListener('click', (event) => {
@@ -149,20 +146,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // 【NEW】枠線削除のショートカットを Shift + Delete に変更
-        if (e.key === 'Delete' && e.shiftKey) {
-            e.preventDefault();
-            const boxToDelete = boxes.find(box => 
-                cursorPosition.x >= box.x && cursorPosition.x < box.x + box.width &&
-                cursorPosition.y >= box.y && cursorPosition.y < box.y + box.height
-            );
-            if (boxToDelete) {
-                boxes = boxes.filter(box => box.id !== boxToDelete.id);
-            }
-            render();
-            return;
-        }
-
         const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
         if (controlKeys.includes(e.key)) {
             e.preventDefault();
@@ -175,15 +158,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 cursorPosition.x = 0;
             }
 
-            // 【NEW】Backspace と Delete のロジックを行の再構築方式に変更
+            // 【修正】Backspace と Delete のロジックを新しい関数で書き直し
             if (e.key === 'Backspace') {
                 if (cursorPosition.x > 0) {
-                    rebaseLine(cursorPosition.y, cursorPosition.x - GRID_SIZE, '');
+                    operateOnLine(cursorPosition.y, cursorPosition.x - GRID_SIZE, 1, '');
                     cursorPosition.x -= GRID_SIZE;
                 }
             }
             if (e.key === 'Delete') {
-                rebaseLine(cursorPosition.y, cursorPosition.x, '');
+                operateOnLine(cursorPosition.y, cursorPosition.x, 1, '');
             }
             render();
         }
@@ -210,13 +193,24 @@ document.addEventListener('DOMContentLoaded', () => {
             currentMode = 'normal';
             selectionStart = null;
         }
+        // 【NEW】選択モード中にDeleteキーで枠線を削除する機能
+        if (e.key === 'Delete') {
+            const rect = getSelectionRect();
+            if (rect) {
+                // 選択範囲と完全に一致する枠線を探して削除
+                boxes = boxes.filter(box => 
+                    !(box.x === rect.x && box.y === rect.y && box.width === rect.width && box.height === rect.height)
+                );
+            }
+            currentMode = 'normal';
+            selectionStart = null;
+        }
         render();
     }
     
-    // 【NEW】文字入力イベントを行の再構築方式に変更
     const handleTextInput = (text) => {
         if (text) {
-            rebaseLine(cursorPosition.y, cursorPosition.x, text);
+            operateOnLine(cursorPosition.y, cursorPosition.x, 0, text);
             cursorPosition.x += text.length * GRID_SIZE;
             render();
         }
