@@ -92,36 +92,34 @@ document.addEventListener('DOMContentLoaded', () => {
             height: y2 - y1 + GRID_SIZE,
         };
     }
+    
+    // 【NEW】行のデータを再構築する方式に全面変更
+    function rebaseLine(y, cursorIndex, textToInsert = '') {
+        // 1. 対象行の文字をすべて取得し、x座標でソート
+        const lineChars = Object.keys(paperData)
+            .map(key => ({ key, x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) }))
+            .filter(item => item.y === y)
+            .sort((a, b) => a.x - b.x);
 
-    // 【NEW】文字の「挿入」を行う新しい関数
-    function insertText(text) {
-        if (!text) return;
+        // 2. 行の文字列を再構築
+        let lineText = lineChars.map(item => paperData[item.key]).join('');
+        
+        // 3. 文字列に新しい文字を挿入
+        const charIndex = Math.floor(cursorIndex / GRID_SIZE);
+        lineText = lineText.slice(0, charIndex) + textToInsert + lineText.slice(charIndex);
 
-        for (const char of text) {
-            const currentX = cursorPosition.x;
-            const currentY = cursorPosition.y;
+        // 4. 対象行の古いデータをすべて削除
+        lineChars.forEach(item => delete paperData[item.key]);
 
-            // 1. 同じ行で、カーソル位置より右にある文字を取得し、x座標の大きい順（右から）にソート
-            const charsToShift = Object.keys(paperData)
-                .map(key => ({ key, ...JSON.parse(`{"x":${key.split(',')[0]},"y":${key.split(',')[1]}}`) }))
-                .filter(item => item.y === currentY && item.x >= currentX)
-                .sort((a, b) => b.x - a.x);
-            
-            // 2. 取得した文字を1マスずつ右にずらす
-            charsToShift.forEach(item => {
-                const charToMove = paperData[item.key];
-                const newKey = `${item.x + GRID_SIZE},${item.y}`;
-                paperData[newKey] = charToMove;
-            });
-            
-            // 3. カーソル位置に新しい文字を挿入
-            const newCharKey = `${currentX},${currentY}`;
-            paperData[newCharKey] = char;
-
-            // 4. カーソルを右に移動
-            cursorPosition.x += GRID_SIZE;
+        // 5. 新しい文字列でデータを再構築
+        for (let i = 0; i < lineText.length; i++) {
+            const char = lineText[i];
+            const newKey = `${i * GRID_SIZE},${y}`;
+            paperData[newKey] = char;
         }
     }
+
+    // --- イベントリスナー ---
     
     container.addEventListener('click', (event) => {
         const rect = container.getBoundingClientRect();
@@ -151,8 +149,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // 【NEW】枠線削除のショートカット
-        if (e.key === 'd' && (e.ctrlKey || e.metaKey)) {
+        // 【NEW】枠線削除のショートカットを Shift + Delete に変更
+        if (e.key === 'Delete' && e.shiftKey) {
             e.preventDefault();
             const boxToDelete = boxes.find(box => 
                 cursorPosition.x >= box.x && cursorPosition.x < box.x + box.width &&
@@ -177,39 +175,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 cursorPosition.x = 0;
             }
 
-            // 【NEW】Backspace と Delete のロジックを「文字ずらし」に対応
+            // 【NEW】Backspace と Delete のロジックを行の再構築方式に変更
             if (e.key === 'Backspace') {
                 if (cursorPosition.x > 0) {
+                    rebaseLine(cursorPosition.y, cursorPosition.x - GRID_SIZE, '');
                     cursorPosition.x -= GRID_SIZE;
-                    const keyToDelete = `${cursorPosition.x},${cursorPosition.y}`;
-                    delete paperData[keyToDelete];
-                    // 後続の文字を左に詰める
-                    const charsToShift = Object.keys(paperData)
-                        .map(key => ({ key, ...JSON.parse(`{"x":${key.split(',')[0]},"y":${key.split(',')[1]}}`) }))
-                        .filter(item => item.y === cursorPosition.y && item.x > cursorPosition.x)
-                        .sort((a, b) => a.x - b.x); // x座標の小さい順（左から）
-                    
-                    charsToShift.forEach(item => {
-                        const charToMove = paperData[item.key];
-                        paperData[`${item.x - GRID_SIZE},${item.y}`] = charToMove;
-                        delete paperData[item.key];
-                    });
                 }
             }
             if (e.key === 'Delete') {
-                const keyToDelete = `${cursorPosition.x},${cursorPosition.y}`;
-                delete paperData[keyToDelete];
-                 // 後続の文字を左に詰める（同上）
-                const charsToShift = Object.keys(paperData)
-                    .map(key => ({ key, ...JSON.parse(`{"x":${key.split(',')[0]},"y":${key.split(',')[1]}}`) }))
-                    .filter(item => item.y === cursorPosition.y && item.x > cursorPosition.x)
-                    .sort((a, b) => a.x - b.x);
-                
-                charsToShift.forEach(item => {
-                    const charToMove = paperData[item.key];
-                    paperData[`${item.x - GRID_SIZE},${item.y}`] = charToMove;
-                    delete paperData[item.key];
-                });
+                rebaseLine(cursorPosition.y, cursorPosition.x, '');
             }
             render();
         }
@@ -239,20 +213,26 @@ document.addEventListener('DOMContentLoaded', () => {
         render();
     }
     
-    // 日本語入力関連は、文字入力を insertText 関数に渡すように変更
+    // 【NEW】文字入力イベントを行の再構築方式に変更
+    const handleTextInput = (text) => {
+        if (text) {
+            rebaseLine(cursorPosition.y, cursorPosition.x, text);
+            cursorPosition.x += text.length * GRID_SIZE;
+            render();
+        }
+    };
+    
     hiddenInput.addEventListener('compositionstart', () => { isComposing = true; compositionText = ''; });
     hiddenInput.addEventListener('compositionupdate', (e) => { compositionText = e.data; render(); });
     hiddenInput.addEventListener('compositionend', (e) => {
         isComposing = false;
         compositionText = '';
-        insertText(e.data); // typeText -> insertText
-        render();
-        hiddenInput.value = '';
+        handleTextInput(e.data);
+        e.target.value = '';
     });
     hiddenInput.addEventListener('input', (e) => {
         if (isComposing) return;
-        insertText(e.target.value); // typeText -> insertText
-        render();
+        handleTextInput(e.target.value);
         e.target.value = '';
     });
 
