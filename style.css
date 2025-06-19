@@ -22,24 +22,40 @@ body {
 
 /* === JavaScriptで動的に作成する要素のスタイル === */
 
-/* 入力確定後に表示されるテキスト */
+/* 入力確定後に表示されるテキスト全体のコンテナ */
 .text-element {
-    position: absolute; /* 親(canvas-container)を基準に位置を固定 */
-    padding: 5px;
-    white-space: pre-wrap; /* 入力された改行をそのまま表示する */
+    position: absolute;
+    /* white-space: pre-wrap; ← flexboxで制御するため不要に */
     font-size: 16px;
     line-height: 1.5;
+    /* 中の文字（.char-box）を横に並べる */
+    display: flex;
+    /* 必要に応じて折り返す */
+    flex-wrap: wrap;
 }
 
-/* 入力中の一時的なテキストエリア */
+/* 1文字を格納する箱のスタイル */
+.char-box {
+    width: 20px;  /* 方眼のサイズに合わせる */
+    height: 20px; /* 方眼のサイズに合わせる */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 入力中の一時的なテキストエリア（透明化済み） */
 .temp-textarea {
-    position: absolute; /* 親(canvas-container)を基準に位置を固定 */
-    border: 1px solid #007bff;
+    position: absolute;
+    /* 枠線と背景を透明にする */
+    border: none;
+    background-color: transparent;
+    /* その他のスタイル */
     outline: none;
+    resize: none;
+    overflow: hidden;
+    padding: 5px;
     font-size: 16px;
     line-height: 1.5;
-    padding: 5px;
-    background-color: rgba(255, 255, 255, 0.9);
-    resize: none; /* リサイズを無効にする */
-    overflow: hidden; /* スクロールバーを隠す */
+    /* 入力カーソルの色を分かりやすくする */
+    caret-color: #007bff;
 }
