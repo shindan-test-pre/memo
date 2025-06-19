@@ -7,62 +7,92 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const GRID_SIZE = 20;
 
-    // --- 状態管理 ---
-    let paperData = {}; // 確定した文字データ
+    let paperData = {};
+    let boxes = []; 
+    let nextBoxId = 0;
+
     let cursorPosition = { x: 0, y: 0 };
-    let isComposing = false; // 変換中かどうかのフラグ
-    let compositionText = ''; // 変換中の文字列データ
+    let currentMode = 'normal';
+    let selectionStart = null;
+
+    let isComposing = false;
+    let compositionText = '';
 
     const cursorElement = document.createElement('div');
     cursorElement.classList.add('cursor');
 
     function render() {
-        // 1. 描画内容を一旦クリア
-        const elementsToRemove = container.querySelectorAll('.char-cell, .cursor');
+        const elementsToRemove = container.querySelectorAll('.char-cell, .cursor, .selection-highlight, .border-box');
         elementsToRemove.forEach(el => el.remove());
 
-        // 2. 確定済みの文字を描画
+        boxes.forEach(box => {
+            const boxEl = document.createElement('div');
+            boxEl.classList.add('border-box');
+            boxEl.style.left = `${box.x}px`;
+            boxEl.style.top = `${box.y}px`;
+            boxEl.style.width = `${box.width}px`;
+            boxEl.style.height = `${box.height}px`;
+            container.appendChild(boxEl);
+        });
+
         for (const key in paperData) {
             const [x, y] = key.split(',').map(Number);
             createCharCell(paperData[key], x, y);
         }
 
-        // 3. 【NEW】変換中の文字を描画
+        if (currentMode === 'visual' && selectionStart) {
+            const { x, y, width, height } = getSelectionRect();
+            const highlightEl = document.createElement('div');
+            highlightEl.classList.add('selection-highlight');
+            highlightEl.style.left = `${x}px`;
+            highlightEl.style.top = `${y}px`;
+            highlightEl.style.width = `${width}px`;
+            highlightEl.style.height = `${height}px`;
+            container.appendChild(highlightEl);
+        }
+
         if (isComposing && compositionText) {
             let tempX = cursorPosition.x;
             for (const char of compositionText) {
-                createCharCell(char, tempX, cursorPosition.y, true); // isComposingフラグを渡す
+                createCharCell(char, tempX, cursorPosition.y, true);
                 tempX += GRID_SIZE;
             }
         }
         
-        // 4. カーソルを描画
-        // 変換中は、変換中文字列の末尾にカーソルを置く
         const cursorX = cursorPosition.x + (isComposing ? compositionText.length * GRID_SIZE : 0);
         cursorElement.style.left = `${cursorX}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
         container.appendChild(cursorElement);
 
-        // 5. 見えない入力欄の位置を更新し、フォーカスを維持
         hiddenInput.style.left = `${cursorX}px`;
         hiddenInput.style.top = `${cursorPosition.y}px`;
         hiddenInput.focus();
     }
 
-    // 文字セルを生成するヘルパー関数
     function createCharCell(char, x, y, isComposingChar = false) {
         const charCell = document.createElement('div');
         charCell.classList.add('char-cell');
-        if (isComposingChar) {
-            charCell.classList.add('composing-char');
-        }
+        if (isComposingChar) charCell.classList.add('composing-char');
         charCell.style.left = `${x}px`;
         charCell.style.top = `${y}px`;
         charCell.innerText = char;
         container.appendChild(charCell);
     }
     
-    // 確定したテキストをデータに書き込む関数
+    function getSelectionRect() {
+        if (!selectionStart) return null;
+        const x1 = Math.min(selectionStart.x, cursorPosition.x);
+        const y1 = Math.min(selectionStart.y, cursorPosition.y);
+        const x2 = Math.max(selectionStart.x, cursorPosition.x);
+        const y2 = Math.max(selectionStart.y, cursorPosition.y);
+        return {
+            x: x1,
+            y: y1,
+            width: x2 - x1 + GRID_SIZE,
+            height: y2 - y1 + GRID_SIZE,
+        };
+    }
+
     function typeText(text) {
         if (text) {
             for (const char of text) {
@@ -79,44 +109,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const y = event.clientY - rect.top + container.scrollTop;
         cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE;
         cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE;
+        if (currentMode === 'visual') {
+            currentMode = 'normal';
+            selectionStart = null;
+        }
         render();
-    });
-    
-    // --- イベントリスナーの最終構成 ---
-
-    hiddenInput.addEventListener('compositionstart', () => {
-        isComposing = true;
-        compositionText = '';
-    });
-    
-    // 【NEW】変換の途中経過をリアルタイムで取得
-    hiddenInput.addEventListener('compositionupdate', (e) => {
-        compositionText = e.data;
-        render();
-    });
-
-    hiddenInput.addEventListener('compositionend', (e) => {
-        isComposing = false;
-        compositionText = '';
-        typeText(e.data);
-        render();
-        hiddenInput.value = '';
-    });
-
-    hiddenInput.addEventListener('input', (e) => {
-        if (isComposing) return;
-        typeText(e.target.value);
-        render();
-        e.target.value = '';
     });
 
     hiddenInput.addEventListener('keydown', (e) => {
-        if (isComposing) return; // 変換中は操作キーを無効化
+        if (isComposing) return;
 
+        if (currentMode === 'normal') {
+            handleNormalModeKeys(e);
+        } else if (currentMode === 'visual') {
+            handleVisualModeKeys(e);
+        }
+    });
+
+    function handleNormalModeKeys(e) {
+        // 【ここを変更！】'v'キー単体から、Ctrl+E または Cmd+E に変更
+        if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault(); // ブラウザのショートカットを無効化
+            currentMode = 'visual';
+            selectionStart = { ...cursorPosition };
+            render();
+            return;
+        }
+        
         const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
         if (controlKeys.includes(e.key)) {
             e.preventDefault();
-            
             if (e.key === 'ArrowUp') cursorPosition.y = Math.max(0, cursorPosition.y - GRID_SIZE);
             if (e.key === 'ArrowDown') cursorPosition.y += GRID_SIZE;
             if (e.key === 'ArrowLeft') cursorPosition.x = Math.max(0, cursorPosition.x - GRID_SIZE);
@@ -124,20 +146,58 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'Backspace') {
                 if (cursorPosition.x > 0) {
                     cursorPosition.x -= GRID_SIZE;
-                    const keyToDelete = `${cursorPosition.x},${cursorPosition.y}`;
-                    delete paperData[keyToDelete];
+                    delete paperData[`${cursorPosition.x},${cursorPosition.y}`];
                 }
             }
-            if (e.key === 'Delete') {
-                const key = `${cursorPosition.x},${cursorPosition.y}`;
-                delete paperData[key];
-            }
+            if (e.key === 'Delete') delete paperData[`${cursorPosition.x},${cursorPosition.y}`];
             if (e.key === 'Enter') {
                 cursorPosition.y += GRID_SIZE;
                 cursorPosition.x = 0;
             }
             render();
         }
+    }
+
+    function handleVisualModeKeys(e) {
+        e.preventDefault();
+        const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+        if (arrowKeys.includes(e.key)) {
+            if (e.key === 'ArrowUp') cursorPosition.y = Math.max(0, cursorPosition.y - GRID_SIZE);
+            if (e.key === 'ArrowDown') cursorPosition.y += GRID_SIZE;
+            if (e.key === 'ArrowLeft') cursorPosition.x = Math.max(0, cursorPosition.x - GRID_SIZE);
+            if (e.key === 'ArrowRight') cursorPosition.x += GRID_SIZE;
+        }
+
+        if (e.key === 'b') {
+            const rect = getSelectionRect();
+            if (rect) {
+                boxes.push({ id: `box${nextBoxId++}`, ...rect });
+            }
+            currentMode = 'normal';
+            selectionStart = null;
+        }
+
+        if (e.key === 'Escape') {
+            currentMode = 'normal';
+            selectionStart = null;
+        }
+        render();
+    }
+
+    hiddenInput.addEventListener('compositionstart', () => { isComposing = true; compositionText = ''; });
+    hiddenInput.addEventListener('compositionupdate', (e) => { compositionText = e.data; render(); });
+    hiddenInput.addEventListener('compositionend', (e) => {
+        isComposing = false;
+        compositionText = '';
+        typeText(e.data);
+        render();
+        hiddenInput.value = '';
+    });
+    hiddenInput.addEventListener('input', (e) => {
+        if (isComposing) return;
+        typeText(e.target.value);
+        render();
+        e.target.value = '';
     });
 
     render();
