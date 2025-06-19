@@ -1,121 +1,109 @@
 document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('canvas-container');
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'text';
+    hiddenInput.classList.add('hidden-input');
+    container.appendChild(hiddenInput);
+
     const GRID_SIZE = 20;
 
-    // 新規作成：何もない場所をクリックした時の処理
-    container.addEventListener('click', (event) => {
-        if (event.target.id === 'canvas-container') {
-            const existingTextarea = document.querySelector('.temp-textarea');
-            if (existingTextarea) {
-                existingTextarea.blur();
-                return;
-            }
-            const rect = container.getBoundingClientRect();
-            const x = event.clientX - rect.left + container.scrollLeft;
-            const y = event.clientY - rect.top + container.scrollTop;
-            const snappedX = Math.round(x / GRID_SIZE) * GRID_SIZE;
-            const snappedY = Math.round(y / GRID_SIZE) * GRID_SIZE;
-            createTemporaryTextarea(snappedX, snappedY);
+    // データ：アプリの唯一の信頼できる情報源 (Single Source of Truth)
+    let paperData = {}; // 例: { "20,40": "A" }
+    let cursorPosition = { x: 0, y: 0 };
+
+    // --- 描画関連 ---
+    const cursorElement = document.createElement('div');
+    cursorElement.classList.add('cursor');
+
+    function render() {
+        // 1. コンテナを一旦クリア（カーソルと非表示inputを除く）
+        while (container.firstChild && container.firstChild !== hiddenInput) {
+            container.removeChild(container.firstChild);
         }
+
+        // 2. paperDataに基づいて文字を再描画
+        for (const key in paperData) {
+            const [x, y] = key.split(',').map(Number);
+            const char = paperData[key];
+            
+            const charCell = document.createElement('div');
+            charCell.classList.add('char-cell');
+            charCell.style.left = `${x}px`;
+            charCell.style.top = `${y}px`;
+            charCell.innerText = char;
+            container.appendChild(charCell);
+        }
+
+        // 3. カーソルを再描画
+        cursorElement.style.left = `${cursorPosition.x}px`;
+        cursorElement.style.top = `${cursorPosition.y}px`;
+        container.appendChild(cursorElement);
+    }
+    
+    // --- イベントハンドラ ---
+
+    // クリック時の処理
+    container.addEventListener('click', (event) => {
+        // キーボード入力を受け付けるために非表示のinputにフォーカスを当てる
+        hiddenInput.focus();
+
+        const rect = container.getBoundingClientRect();
+        const x = event.clientX - rect.left + container.scrollLeft;
+        const y = event.clientY - rect.top + container.scrollTop;
+        
+        cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE;
+        cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE;
+        
+        render();
     });
 
-    /**
-     * テキスト入力エリアを作成する（新規・編集兼用）
-     * @param {number} x - 位置(left)
-     * @param {number} y - 位置(top)
-     * @param {string} [initialValue=''] - 初期値（編集時に使用）
-     */
-    function createTemporaryTextarea(x, y, initialValue = '') {
-        const textarea = document.createElement('textarea');
-        textarea.classList.add('temp-textarea');
-        textarea.value = initialValue;
-        textarea.style.left = `${x}px`;
-        textarea.style.top = `${y}px`;
-        
-        // 【UI改善】背景の方眼がズレないように位置を調整
-        textarea.style.backgroundPosition = `-${x % GRID_SIZE}px -${y % GRID_SIZE}px`;
+    // キー入力時の処理
+    hiddenInput.addEventListener('keydown', (e) => {
+        e.preventDefault(); // ブラウザのデフォルト動作をキャンセル
+        const key = `${cursorPosition.x},${cursorPosition.y}`;
 
-        const onBlur = () => {
-            if (textarea.value.trim() !== '') {
-                createTextElement(textarea.value, x, y);
-            }
-            // 親要素からtextareaを削除（存在確認も行う）
-            if (textarea.parentElement) {
-                textarea.parentElement.removeChild(textarea);
-            }
-        };
-        textarea.addEventListener('blur', onBlur);
-
-        textarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                textarea.blur();
-            }
-        });
-        
-        const adjustTextareaSize = () => {
-            textarea.style.height = 'auto';
-            textarea.style.width = 'auto';
-            // 最低でもGRID_SIZE分の幅と高さを確保
-            textarea.style.height = `${Math.max(textarea.scrollHeight, GRID_SIZE)}px`;
-            textarea.style.width = `${Math.max(textarea.scrollWidth, GRID_SIZE)}px`;
-        };
-        textarea.addEventListener('input', adjustTextareaSize);
-
-        container.appendChild(textarea);
-        textarea.focus();
-        // 初期値がある場合、初期表示のサイズを調整
-        if (initialValue) {
-            adjustTextareaSize();
+        switch (e.key) {
+            case 'ArrowUp':
+                cursorPosition.y = Math.max(0, cursorPosition.y - GRID_SIZE);
+                break;
+            case 'ArrowDown':
+                cursorPosition.y += GRID_SIZE;
+                break;
+            case 'ArrowLeft':
+                cursorPosition.x = Math.max(0, cursorPosition.x - GRID_SIZE);
+                break;
+            case 'ArrowRight':
+                cursorPosition.x += GRID_SIZE;
+                break;
+            case 'Backspace':
+                // カーソルの左の文字を消す（カーソルが左端でなければ）
+                if (cursorPosition.x > 0) {
+                    cursorPosition.x -= GRID_SIZE;
+                    const keyToDelete = `${cursorPosition.x},${cursorPosition.y}`;
+                    delete paperData[keyToDelete];
+                }
+                break;
+            case 'Delete':
+                // カーソル位置の文字を消す
+                delete paperData[key];
+                break;
+            case 'Enter':
+                 // カーソルを次の行の先頭に移動
+                cursorPosition.y += GRID_SIZE;
+                cursorPosition.x = 0;
+                break;
+            default:
+                // 通常の文字入力（1文字の場合のみ）
+                if (e.key.length === 1) {
+                    paperData[key] = e.key;
+                    cursorPosition.x += GRID_SIZE; // 入力後、カーソルを右に移動
+                }
+                break;
         }
-    }
+        render(); // どんな操作後も必ず再描画
+    });
 
-    /**
-     * 確定したテキストブロックを画面に配置する
-     */
-    function createTextElement(text, x, y) {
-        const textElement = document.createElement('div');
-        textElement.classList.add('text-element');
-        textElement.style.left = `${x}px`;
-        textElement.style.top = `${y}px`;
-
-        // テキスト内容を保持させておく（編集時に利用）
-        textElement.dataset.text = text;
-
-        const chars = text.split('');
-        chars.forEach(char => {
-            const charBox = document.createElement('div');
-            charBox.classList.add('char-box');
-            if (char === '\n') {
-                charBox.style.flexBasis = '100%';
-                charBox.style.height = '0';
-            } else {
-                charBox.innerText = char;
-            }
-            textElement.appendChild(charBox);
-        });
-
-        // 【編集機能】ダブルクリックで編集モードに入る
-        textElement.addEventListener('dblclick', (e) => {
-            e.stopPropagation(); // 親コンテナへのイベント伝播を停止
-            enterEditMode(textElement);
-        });
-
-        container.appendChild(textElement);
-    }
-
-    /**
-     * 編集モードを開始する
-     * @param {HTMLElement} textElement - 編集対象のテキストブロック
-     */
-    function enterEditMode(textElement) {
-        const text = textElement.dataset.text;
-        const x = parseInt(textElement.style.left, 10);
-        const y = parseInt(textElement.style.top, 10);
-
-        // 元のテキストブロックを削除
-        textElement.parentElement.removeChild(textElement);
-        // 同じ場所に同じ内容で入力エリアを作成
-        createTemporaryTextarea(x, y, text);
-    }
+    // --- 初期化 ---
+    hiddenInput.focus(); // 初期状態でフォーカス
+    render(); // アプリケーションの初回描画
 });
