@@ -15,9 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
     cursorElement.classList.add('cursor');
 
     function render() {
+        // 1. コンテナをクリア
         while (container.firstChild && container.firstChild !== hiddenInput) {
             container.removeChild(container.firstChild);
         }
+        
+        // 2. 文字を再描画
         for (const key in paperData) {
             const [x, y] = key.split(',').map(Number);
             const char = paperData[key];
@@ -28,9 +31,14 @@ document.addEventListener('DOMContentLoaded', () => {
             charCell.innerText = char;
             container.appendChild(charCell);
         }
+        
+        // 3. カーソルを再描画
         cursorElement.style.left = `${cursorPosition.x}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
         container.appendChild(cursorElement);
+
+        // 4. 【重要】再描画後に必ずフォーカスを当て直す
+        hiddenInput.focus();
     }
     
     container.addEventListener('click', (event) => {
@@ -43,24 +51,17 @@ document.addEventListener('DOMContentLoaded', () => {
         render();
     });
     
-    // --- イベントリスナーの再構築 ---
-
-    // 1. 日本語入力の「変換中」状態を管理
     hiddenInput.addEventListener('compositionstart', () => {
         isComposing = true;
     });
     hiddenInput.addEventListener('compositionend', () => {
         isComposing = false;
-        // inputイベントが直後に発火するので、ここでは何もしない
     });
 
-    // 2. 「文字の書き込み」はすべてこのinputイベントに一本化
     hiddenInput.addEventListener('input', (e) => {
-        // 変換途中は処理しない
         if (isComposing) {
             return;
         }
-
         const text = e.target.value;
         if (text) {
             for (const char of text) {
@@ -70,48 +71,43 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             render();
         }
-        // 処理が終わったら入力フィールドをクリア
         e.target.value = '';
     });
 
-    // 3. 「操作」系のキー入力のみを担当
     hiddenInput.addEventListener('keydown', (e) => {
-        // 文字入力に関する default ケースを削除し、操作のみを記述
-        switch (e.key) {
-            case 'ArrowUp':
-            case 'ArrowDown':
-            case 'ArrowLeft':
-            case 'ArrowRight':
-            case 'Backspace':
-            case 'Delete':
-            case 'Enter':
-                e.preventDefault(); // ブラウザのデフォルト動作をキャンセル
-                const key = `${cursorPosition.x},${cursorPosition.y}`;
-                
-                if (e.key === 'ArrowUp') cursorPosition.y = Math.max(0, cursorPosition.y - GRID_SIZE);
-                if (e.key === 'ArrowDown') cursorPosition.y += GRID_SIZE;
-                if (e.key === 'ArrowLeft') cursorPosition.x = Math.max(0, cursorPosition.x - GRID_SIZE);
-                if (e.key === 'ArrowRight') cursorPosition.x += GRID_SIZE;
-                if (e.key === 'Backspace') {
-                    if (cursorPosition.x > 0) {
-                        cursorPosition.x -= GRID_SIZE;
-                        const keyToDelete = `${cursorPosition.x},${cursorPosition.y}`;
-                        delete paperData[keyToDelete];
-                    }
+        if (isComposing) return;
+
+        const controlKeys = [
+            'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+            'Backspace', 'Delete', 'Enter'
+        ];
+
+        if (controlKeys.includes(e.key)) {
+            e.preventDefault();
+            const key = `${cursorPosition.x},${cursorPosition.y}`;
+            
+            if (e.key === 'ArrowUp') cursorPosition.y = Math.max(0, cursorPosition.y - GRID_SIZE);
+            if (e.key === 'ArrowDown') cursorPosition.y += GRID_SIZE;
+            if (e.key === 'ArrowLeft') cursorPosition.x = Math.max(0, cursorPosition.x - GRID_SIZE);
+            if (e.key === 'ArrowRight') cursorPosition.x += GRID_SIZE;
+            if (e.key === 'Backspace') {
+                if (cursorPosition.x > 0) {
+                    cursorPosition.x -= GRID_SIZE;
+                    const keyToDelete = `${cursorPosition.x},${cursorPosition.y}`;
+                    delete paperData[keyToDelete];
                 }
-                if (e.key === 'Delete') {
-                    delete paperData[key];
-                }
-                if (e.key === 'Enter') {
-                    cursorPosition.y += GRID_SIZE;
-                    cursorPosition.x = 0;
-                }
-                render();
-                break;
+            }
+            if (e.key === 'Delete') {
+                delete paperData[key];
+            }
+            if (e.key === 'Enter') {
+                cursorPosition.y += GRID_SIZE;
+                cursorPosition.x = 0;
+            }
+            render();
         }
     });
 
     // --- 初期化 ---
-    hiddenInput.focus();
     render();
 });
