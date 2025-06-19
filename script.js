@@ -3,41 +3,66 @@ document.addEventListener('DOMContentLoaded', () => {
     const hiddenInput = document.createElement('input');
     hiddenInput.type = 'text';
     hiddenInput.classList.add('hidden-input');
-    hiddenInput.style.left = '0px';
-    hiddenInput.style.top = '0px';
     container.appendChild(hiddenInput);
 
     const GRID_SIZE = 20;
 
-    let paperData = {};
+    // --- 状態管理 ---
+    let paperData = {}; // 確定した文字データ
     let cursorPosition = { x: 0, y: 0 };
-    let isComposing = false;
+    let isComposing = false; // 変換中かどうかのフラグ
+    let compositionText = ''; // 変換中の文字列データ
 
     const cursorElement = document.createElement('div');
     cursorElement.classList.add('cursor');
 
     function render() {
-        while (container.firstChild && container.firstChild !== hiddenInput) {
-            container.removeChild(container.firstChild);
-        }
+        // 1. 描画内容を一旦クリア
+        const elementsToRemove = container.querySelectorAll('.char-cell, .cursor');
+        elementsToRemove.forEach(el => el.remove());
+
+        // 2. 確定済みの文字を描画
         for (const key in paperData) {
             const [x, y] = key.split(',').map(Number);
-            const char = paperData[key];
-            const charCell = document.createElement('div');
-            charCell.classList.add('char-cell');
-            charCell.style.left = `${x}px`;
-            charCell.style.top = `${y}px`;
-            charCell.innerText = char;
-            container.appendChild(charCell);
+            createCharCell(paperData[key], x, y);
         }
-        cursorElement.style.left = `${cursorPosition.x}px`;
+
+        // 3. 【NEW】変換中の文字を描画
+        if (isComposing && compositionText) {
+            let tempX = cursorPosition.x;
+            for (const char of compositionText) {
+                createCharCell(char, tempX, cursorPosition.y, true); // isComposingフラグを渡す
+                tempX += GRID_SIZE;
+            }
+        }
+        
+        // 4. カーソルを描画
+        // 変換中は、変換中文字列の末尾にカーソルを置く
+        const cursorX = cursorPosition.x + (isComposing ? compositionText.length * GRID_SIZE : 0);
+        cursorElement.style.left = `${cursorX}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
-        hiddenInput.style.left = `${cursorPosition.x}px`;
-        hiddenInput.style.top = `${cursorPosition.y}px`;
         container.appendChild(cursorElement);
+
+        // 5. 見えない入力欄の位置を更新し、フォーカスを維持
+        hiddenInput.style.left = `${cursorX}px`;
+        hiddenInput.style.top = `${cursorPosition.y}px`;
         hiddenInput.focus();
     }
 
+    // 文字セルを生成するヘルパー関数
+    function createCharCell(char, x, y, isComposingChar = false) {
+        const charCell = document.createElement('div');
+        charCell.classList.add('char-cell');
+        if (isComposingChar) {
+            charCell.classList.add('composing-char');
+        }
+        charCell.style.left = `${x}px`;
+        charCell.style.top = `${y}px`;
+        charCell.innerText = char;
+        container.appendChild(charCell);
+    }
+    
+    // 確定したテキストをデータに書き込む関数
     function typeText(text) {
         if (text) {
             for (const char of text) {
@@ -45,11 +70,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 paperData[key] = char;
                 cursorPosition.x += GRID_SIZE;
             }
-            render();
         }
     }
     
-    container.addEventListener('click', () => {
+    container.addEventListener('click', (event) => {
         const rect = container.getBoundingClientRect();
         const x = event.clientX - rect.left + container.scrollLeft;
         const y = event.clientY - rect.top + container.scrollTop;
@@ -60,35 +84,34 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- イベントリスナーの最終構成 ---
 
-    // 1. 日本語入力の「変換中」フラグを管理
     hiddenInput.addEventListener('compositionstart', () => {
         isComposing = true;
+        compositionText = '';
+    });
+    
+    // 【NEW】変換の途中経過をリアルタイムで取得
+    hiddenInput.addEventListener('compositionupdate', (e) => {
+        compositionText = e.data;
+        render();
     });
 
-    // 2. 日本語入力の「確定」を専門に担当
     hiddenInput.addEventListener('compositionend', (e) => {
         isComposing = false;
-        // 確定した文字列（e.data）で文字入力処理を呼び出す
+        compositionText = '';
         typeText(e.data);
-        // `input`イベントでの二重処理を防ぐため、値をクリア
-        e.target.value = '';
+        render();
+        hiddenInput.value = '';
     });
 
-    // 3. 半角英数などの「直接入力」を専門に担当
     hiddenInput.addEventListener('input', (e) => {
-        // 変換中はなにもしない
-        if (isComposing) {
-            return;
-        }
-        // `compositionend`で処理済みの場合は、valueがクリアされているので、
-        // このハンドラは実質的に半角文字入力の場合のみ動作する
+        if (isComposing) return;
         typeText(e.target.value);
+        render();
         e.target.value = '';
     });
 
-    // 4. キーボードでの「操作」を担当
     hiddenInput.addEventListener('keydown', (e) => {
-        if (isComposing) return;
+        if (isComposing) return; // 変換中は操作キーを無効化
 
         const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
         if (controlKeys.includes(e.key)) {
