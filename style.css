@@ -31,32 +31,32 @@ body {
     user-select: none;
 }
 
+/* 【NEW】変換中の文字に適用するスタイル */
+.composing-char {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    opacity: 0.7;
+}
+
 .cursor {
     position: absolute;
-    width: 20px;
+    width: 2px; /* カーソルを細く変更 */
     height: 20px;
-    background-color: rgba(0, 123, 255, 0.2);
+    background-color: #007bff;
     animation: blink 1s step-end infinite;
     z-index: 10;
 }
 
 @keyframes blink {
     50% {
-        background-color: transparent;
+        opacity: 0;
     }
 }
 
-/* 【重要】見えない入力欄の新しいスタイル */
 .hidden-input {
     position: absolute;
-    /* 画面外ではなく、カーソル位置に追従させる（JSで制御） */
-    /* ユーザーには見えないようにする */
     opacity: 0;
-    padding: 0;
-    border: none;
-    /* サイズを極小にすることで、レイアウトに影響を与えない */
     width: 1px;
     height: 1px;
-    /* 入力カーソル（キャレット）も非表示に */
     caret-color: transparent;
 }
