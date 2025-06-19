@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const hiddenInput = document.createElement('input');
     hiddenInput.type = 'text';
     hiddenInput.classList.add('hidden-input');
-    // 初期位置を設定しておく
     hiddenInput.style.left = '0px';
     hiddenInput.style.top = '0px';
     container.appendChild(hiddenInput);
@@ -31,41 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
             charCell.innerText = char;
             container.appendChild(charCell);
         }
-        
-        // カーソルと入力欄の位置を更新
         cursorElement.style.left = `${cursorPosition.x}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
         hiddenInput.style.left = `${cursorPosition.x}px`;
         hiddenInput.style.top = `${cursorPosition.y}px`;
-        
         container.appendChild(cursorElement);
-        
-        // フォーカスを当てる（入力の受付準備）
         hiddenInput.focus();
     }
-    
-    container.addEventListener('click', (event) => {
-        const rect = container.getBoundingClientRect();
-        const x = event.clientX - rect.left + container.scrollLeft;
-        const y = event.clientY - rect.top + container.scrollTop;
-        cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE;
-        cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE;
-        render();
-    });
-    
-    hiddenInput.addEventListener('compositionstart', () => {
-        isComposing = true;
-    });
-    hiddenInput.addEventListener('compositionend', () => {
-        isComposing = false;
-        // inputイベントハンドラに処理を任せるため、ここでは何もしない
-    });
 
-    hiddenInput.addEventListener('input', (e) => {
-        if (isComposing) {
-            return;
-        }
-        const text = e.target.value;
+    function typeText(text) {
         if (text) {
             for (const char of text) {
                 const key = `${cursorPosition.x},${cursorPosition.y}`;
@@ -74,17 +47,50 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             render();
         }
+    }
+    
+    container.addEventListener('click', () => {
+        const rect = container.getBoundingClientRect();
+        const x = event.clientX - rect.left + container.scrollLeft;
+        const y = event.clientY - rect.top + container.scrollTop;
+        cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE;
+        cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE;
+        render();
+    });
+    
+    // --- イベントリスナーの最終構成 ---
+
+    // 1. 日本語入力の「変換中」フラグを管理
+    hiddenInput.addEventListener('compositionstart', () => {
+        isComposing = true;
+    });
+
+    // 2. 日本語入力の「確定」を専門に担当
+    hiddenInput.addEventListener('compositionend', (e) => {
+        isComposing = false;
+        // 確定した文字列（e.data）で文字入力処理を呼び出す
+        typeText(e.data);
+        // `input`イベントでの二重処理を防ぐため、値をクリア
         e.target.value = '';
     });
 
+    // 3. 半角英数などの「直接入力」を専門に担当
+    hiddenInput.addEventListener('input', (e) => {
+        // 変換中はなにもしない
+        if (isComposing) {
+            return;
+        }
+        // `compositionend`で処理済みの場合は、valueがクリアされているので、
+        // このハンドラは実質的に半角文字入力の場合のみ動作する
+        typeText(e.target.value);
+        e.target.value = '';
+    });
+
+    // 4. キーボードでの「操作」を担当
     hiddenInput.addEventListener('keydown', (e) => {
         if (isComposing) return;
 
-        const controlKeys = [
-            'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-            'Backspace', 'Delete', 'Enter'
-        ];
-
+        const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
         if (controlKeys.includes(e.key)) {
             e.preventDefault();
             
