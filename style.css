@@ -1,0 +1,45 @@
+/* ページの余白をなくす */
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* 文字を書き込むエリア全体 */
+#canvas-container {
+    position: relative; /* 子要素の位置の基準になります */
+    width: 100vw; /* 画面の幅いっぱいに広げる */
+    height: 100vh; /* 画面の高さいっぱいに広げる */
+    overflow: hidden; /* エリアからはみ出たものは隠す */
+    cursor: text; /* マウスカーソルをテキスト入力の形にする */
+
+    /* === ここで方眼紙の背景を作成 === */
+    background-color: #fdfdfd; /* 用紙の色 */
+    background-image:
+        linear-gradient(rgba(0, 0, 0, 0.12) 1px, transparent 1px), /* 横線 */
+        linear-gradient(90deg, rgba(0, 0, 0, 0.12) 1px, transparent 1px); /* 縦線 */
+    background-size: 20px 20px; /* 方眼のサイズ */
+}
+
+/* === JavaScriptで動的に作成する要素のスタイル === */
+
+/* 入力確定後に表示されるテキスト */
+.text-element {
+    position: absolute; /* 親(canvas-container)を基準に位置を固定 */
+    padding: 5px;
+    white-space: pre-wrap; /* 入力された改行をそのまま表示する */
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+/* 入力中の一時的なテキストエリア */
+.temp-textarea {
+    position: absolute; /* 親(canvas-container)を基準に位置を固定 */
+    border: 1px solid #007bff;
+    outline: none;
+    font-size: 16px;
+    line-height: 1.5;
+    padding: 5px;
+    background-color: rgba(255, 255, 255, 0.9);
+    resize: none; /* リサイズを無効にする */
+    overflow: hidden; /* スクロールバーを隠す */
+}
