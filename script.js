@@ -127,8 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function handleNormalModeKeys(e) {
-        // 【変更点】選択モードへのショートカットを Ctrl/Cmd + B に変更
-        if (e.key === 'b' && (e.ctrlKey || e.metaKey)) {
+        // 【変更点】選択モードへのショートカットを、以前の Ctrl/Cmd + E に戻しました
+        if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             currentMode = 'visual';
             selectionStart = { ...cursorPosition };
@@ -168,7 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'ArrowRight') cursorPosition.x += GRID_SIZE;
         }
 
-        // 【変更点】枠線の確定を 'Enter' キーに変更
         if (e.key === 'Enter') {
             const rect = getSelectionRect();
             if (rect) {
