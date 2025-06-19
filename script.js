@@ -3,6 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const hiddenInput = document.createElement('input');
     hiddenInput.type = 'text';
     hiddenInput.classList.add('hidden-input');
+    // 初期位置を設定しておく
+    hiddenInput.style.left = '0px';
+    hiddenInput.style.top = '0px';
     container.appendChild(hiddenInput);
 
     const GRID_SIZE = 20;
@@ -15,12 +18,9 @@ document.addEventListener('DOMContentLoaded', () => {
     cursorElement.classList.add('cursor');
 
     function render() {
-        // 1. コンテナをクリア
         while (container.firstChild && container.firstChild !== hiddenInput) {
             container.removeChild(container.firstChild);
         }
-        
-        // 2. 文字を再描画
         for (const key in paperData) {
             const [x, y] = key.split(',').map(Number);
             const char = paperData[key];
@@ -32,17 +32,19 @@ document.addEventListener('DOMContentLoaded', () => {
             container.appendChild(charCell);
         }
         
-        // 3. カーソルを再描画
+        // カーソルと入力欄の位置を更新
         cursorElement.style.left = `${cursorPosition.x}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
+        hiddenInput.style.left = `${cursorPosition.x}px`;
+        hiddenInput.style.top = `${cursorPosition.y}px`;
+        
         container.appendChild(cursorElement);
-
-        // 4. 【重要】再描画後に必ずフォーカスを当て直す
+        
+        // フォーカスを当てる（入力の受付準備）
         hiddenInput.focus();
     }
     
     container.addEventListener('click', (event) => {
-        hiddenInput.focus();
         const rect = container.getBoundingClientRect();
         const x = event.clientX - rect.left + container.scrollLeft;
         const y = event.clientY - rect.top + container.scrollTop;
@@ -56,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     hiddenInput.addEventListener('compositionend', () => {
         isComposing = false;
+        // inputイベントハンドラに処理を任せるため、ここでは何もしない
     });
 
     hiddenInput.addEventListener('input', (e) => {
@@ -84,7 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (controlKeys.includes(e.key)) {
             e.preventDefault();
-            const key = `${cursorPosition.x},${cursorPosition.y}`;
             
             if (e.key === 'ArrowUp') cursorPosition.y = Math.max(0, cursorPosition.y - GRID_SIZE);
             if (e.key === 'ArrowDown') cursorPosition.y += GRID_SIZE;
@@ -98,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             if (e.key === 'Delete') {
+                const key = `${cursorPosition.x},${cursorPosition.y}`;
                 delete paperData[key];
             }
             if (e.key === 'Enter') {
@@ -108,6 +111,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- 初期化 ---
     render();
 });
