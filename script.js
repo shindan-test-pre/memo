@@ -93,8 +93,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // 【修正】文字の挿入・削除を両方扱える、より堅牢な関数に改良
-    function operateOnLine(y, startIndex, deleteCount, textToInsert = '') {
+    // 【修正】文字の挿入・削除を行う、よりシンプルで堅牢な関数
+    function operateOnLine(y, charIndex, deleteCount, textToInsert = '') {
         const lineChars = Object.keys(paperData)
             .map(key => ({ key, x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) }))
             .filter(item => item.y === y)
@@ -102,7 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let lineText = lineChars.map(item => paperData[item.key]).join('');
         
-        const charIndex = Math.floor(startIndex / GRID_SIZE);
         const textArray = lineText.split('');
         textArray.splice(charIndex, deleteCount, ...textToInsert.split(''));
         lineText = textArray.join('');
@@ -115,8 +114,6 @@ document.addEventListener('DOMContentLoaded', () => {
             paperData[newKey] = char;
         }
     }
-    
-    // --- イベントリスナー ---
     
     container.addEventListener('click', (event) => {
         const rect = container.getBoundingClientRect();
@@ -154,19 +151,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'ArrowLeft') cursorPosition.x = Math.max(0, cursorPosition.x - GRID_SIZE);
             if (e.key === 'ArrowRight') cursorPosition.x += GRID_SIZE;
             if (e.key === 'Enter') {
+                const charIndex = Math.floor(cursorPosition.x / GRID_SIZE);
+                operateOnLine(cursorPosition.y, charIndex, 0, '\n'); // Enterは改行文字として扱う
                 cursorPosition.y += GRID_SIZE;
                 cursorPosition.x = 0;
             }
 
-            // 【修正】Backspace と Delete のロジックを新しい関数で書き直し
+            // 【修正】Backspace と Delete のロジックを修正
+            const charIndex = Math.floor(cursorPosition.x / GRID_SIZE);
             if (e.key === 'Backspace') {
-                if (cursorPosition.x > 0) {
-                    operateOnLine(cursorPosition.y, cursorPosition.x - GRID_SIZE, 1, '');
+                if (cursorPosition.x > 0 || charIndex > 0) { // 行頭でも前の行と結合するなどの場合は、さらに複雑なロジックが必要だが、まずは行内削除を完璧にする
+                    operateOnLine(cursorPosition.y, charIndex - 1, 1, '');
                     cursorPosition.x -= GRID_SIZE;
                 }
             }
             if (e.key === 'Delete') {
-                operateOnLine(cursorPosition.y, cursorPosition.x, 1, '');
+                operateOnLine(cursorPosition.y, charIndex, 1, '');
             }
             render();
         }
@@ -193,11 +193,10 @@ document.addEventListener('DOMContentLoaded', () => {
             currentMode = 'normal';
             selectionStart = null;
         }
-        // 【NEW】選択モード中にDeleteキーで枠線を削除する機能
-        if (e.key === 'Delete') {
+        // 【修正】枠線削除のキーを Backspace と Delete の両方に対応
+        if (e.key === 'Delete' || e.key === 'Backspace') {
             const rect = getSelectionRect();
             if (rect) {
-                // 選択範囲と完全に一致する枠線を探して削除
                 boxes = boxes.filter(box => 
                     !(box.x === rect.x && box.y === rect.y && box.width === rect.width && box.height === rect.height)
                 );
@@ -208,9 +207,11 @@ document.addEventListener('DOMContentLoaded', () => {
         render();
     }
     
+    // 【修正】文字入力のロジックを、汎用関数operateOnLineを呼び出すように統一
     const handleTextInput = (text) => {
         if (text) {
-            operateOnLine(cursorPosition.y, cursorPosition.x, 0, text);
+            const charIndex = Math.floor(cursorPosition.x / GRID_SIZE);
+            operateOnLine(cursorPosition.y, charIndex, 0, text);
             cursorPosition.x += text.length * GRID_SIZE;
             render();
         }
