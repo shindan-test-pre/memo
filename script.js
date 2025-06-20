@@ -8,11 +8,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const GRID_SIZE = 20;
 
+    // --- データ管理 ---
     let paperData = {};
     let boxes = [];
     let arrows = [];
     let nextId = 0;
 
+    // --- 状態管理 ---
     let cursorPosition = { x: 0, y: 0 };
     let currentMode = 'normal';
     let selectionStart = null;
@@ -24,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cursorElement = document.createElement('div');
     cursorElement.classList.add('cursor');
 
+    // --- 描画関連 ---
     function render() {
         const elementsToRemove = container.querySelectorAll('.char-cell, .cursor, .selection-highlight, .border-box');
         elementsToRemove.forEach(el => el.remove());
@@ -55,13 +58,23 @@ document.addEventListener('DOMContentLoaded', () => {
             polyline.setAttribute('fill', 'none');
             svgLayer.appendChild(polyline);
         });
+        
+        // 【修正】矢印のプレビュー表示ロジックを再実装
+        if (currentMode === 'arrow' && currentArrowPath.length > 1) {
+            const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            const points = currentArrowPath.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' ');
+            polyline.setAttribute('points', points);
+            polyline.setAttribute('class', 'arrow-line');
+            polyline.setAttribute('marker-end', 'url(#arrowhead)');
+            polyline.setAttribute('fill', 'none');
+            polyline.style.opacity = '0.5';
+            svgLayer.appendChild(polyline);
+        }
 
+        // 【修正】枠線描画ロジックを正しい形に修正
         boxes.forEach(box => {
             const boxEl = document.createElement('div');
             boxEl.classList.add('border-box');
-            if (currentMode === 'arrow' && boxes.find(b => b.id === arrowStartBoxId) === box) { // This condition was incorrect, fixed.
-                boxEl.classList.add('arrow-start');
-            }
             boxEl.style.left = `${box.x}px`;
             boxEl.style.top = `${box.y}px`;
             boxEl.style.width = `${box.width}px`;
@@ -92,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tempX += GRID_SIZE;
             }
         }
-
+        
         const cursorX = cursorPosition.x + (isComposing ? compositionText.length * GRID_SIZE : 0);
         cursorElement.style.left = `${cursorX}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
@@ -112,14 +125,14 @@ document.addEventListener('DOMContentLoaded', () => {
         charCell.innerText = char === '\n' ? '' : char;
         container.appendChild(charCell);
     }
-
+    
     function getSelectionRect() {
         if (!selectionStart) return null;
         const x1 = Math.min(selectionStart.x, cursorPosition.x);
         const y1 = Math.min(selectionStart.y, cursorPosition.y);
         const x2 = Math.max(selectionStart.x, cursorPosition.x);
         const y2 = Math.max(selectionStart.y, cursorPosition.y);
-        return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE };
+        return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE, };
     }
 
     function insertChar(char) {
@@ -152,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
             delete paperData[item.key];
         });
     }
-
+    
     container.addEventListener('click', (event) => {
         const rect = container.getBoundingClientRect();
         const x = event.clientX - rect.left + container.scrollLeft;
@@ -187,6 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             render();
             return;
         }
+        
         const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
         if (controlKeys.includes(e.key)) {
             e.preventDefault();
@@ -229,21 +243,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Delete' || e.key === 'Backspace') {
             const rect = getSelectionRect();
             if (rect) {
-                // 選択範囲に完全に一致する枠線を探して削除
                 const boxToDelete = boxes.find(box => box.x === rect.x && box.y === rect.y && box.width === rect.width && box.height === rect.height);
                 if (boxToDelete) {
                     boxes = boxes.filter(box => box.id !== boxToDelete.id);
-                    // 関連する矢印も削除
-                    arrows = arrows.filter(arrow => arrow.from !== boxToDelete.id && arrow.to !== boxToDelete.id);
                 }
-                
-                // 【NEW】選択範囲に含まれる矢印を削除
                 arrows = arrows.filter(arrow => {
-                    // 矢印のパスのいずれかの点が選択範囲内にあれば、その矢印は削除対象
-                    const isArrowIntersecting = arrow.path.some(p => 
-                        p.x >= rect.x && p.x < rect.x + rect.width &&
-                        p.y >= rect.y && p.y < rect.y + rect.height
-                    );
+                    const isArrowIntersecting = arrow.path.some(p => p.x >= rect.x && p.x < rect.x + rect.width && p.y >= rect.y && p.y < rect.y + rect.height);
                     return !isArrowIntersecting;
                 });
             }
@@ -261,11 +266,20 @@ document.addEventListener('DOMContentLoaded', () => {
             render();
             return;
         }
-        if (e.key === 'ArrowUp' && lastPoint.y > 0) currentArrowPath.push({ x: lastPoint.x, y: lastPoint.y - GRID_SIZE });
-        else if (e.key === 'ArrowDown') currentArrowPath.push({ x: lastPoint.x, y: lastPoint.y + GRID_SIZE });
-        else if (e.key === 'ArrowLeft' && lastPoint.x > 0) currentArrowPath.push({ x: lastPoint.x - GRID_SIZE, y: lastPoint.y });
-        else if (e.key === 'ArrowRight') currentArrowPath.push({ x: lastPoint.x + GRID_SIZE, y: lastPoint.y });
-        else if (e.key === 'Enter') {
+
+        let moved = false;
+        let nextPoint = { ...lastPoint };
+
+        if (e.key === 'ArrowUp' && lastPoint.y > 0) { nextPoint.y -= GRID_SIZE; moved = true; }
+        else if (e.key === 'ArrowDown') { nextPoint.y += GRID_SIZE; moved = true; }
+        else if (e.key === 'ArrowLeft' && lastPoint.x > 0) { nextPoint.x -= GRID_SIZE; moved = true; }
+        else if (e.key === 'ArrowRight') { nextPoint.x += GRID_SIZE; moved = true; }
+        
+        if (moved) {
+            currentArrowPath.push(nextPoint);
+        }
+
+        if (e.key === 'Enter') {
             if (currentArrowPath.length > 1) {
                 arrows.push({ id: `arrow${nextId++}`, path: currentArrowPath });
             }
