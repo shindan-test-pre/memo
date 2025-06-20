@@ -1,19 +1,16 @@
 * {
     box-sizing: border-box;
 }
-
 html, body {
     height: 100%;
     margin: 0;
 }
-
 body {
     background-color: #f0f0f0; 
     padding: 40px; 
     overflow: hidden; 
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
-
 #canvas-container {
     width: 100%;
     height: 100%;
@@ -27,7 +24,6 @@ body {
         linear-gradient(90deg, rgba(0, 0, 0, 0.12) 1px, transparent 1px);
     background-size: 20px 20px;
 }
-
 #arrow-svg-layer {
     position: absolute;
     top: 0;
@@ -37,12 +33,10 @@ body {
     pointer-events: none;
     z-index: 7;
 }
-
 .arrow-line {
     stroke: #333;
     stroke-width: 1.5;
 }
-
 .char-cell, .composing-char {
     position: absolute;
     width: 20px;
@@ -53,13 +47,11 @@ body {
     user-select: none;
     z-index: 8;
 }
-
 .composing-char {
     text-decoration: underline;
     text-decoration-thickness: 1px;
     opacity: 0.7;
 }
-
 .cursor {
     position: absolute;
     width: 2px;
@@ -68,11 +60,9 @@ body {
     animation: blink 1s step-end infinite;
     z-index: 10;
 }
-
 @keyframes blink {
     50% { opacity: 0; }
 }
-
 .hidden-input {
     position: absolute;
     opacity: 0;
@@ -80,22 +70,14 @@ body {
     height: 1px;
     caret-color: transparent;
 }
-
 .selection-highlight {
     position: absolute;
     background-color: rgba(0, 123, 255, 0.2);
     z-index: 5;
 }
-
-/* 【NEW】矢印モードの始点マスをハイライト */
-.arrow-path-start {
-    position: absolute;
-    background-color: rgba(40, 167, 69, 0.2);
-    z-index: 5;
-}
-
 .border-box {
     position: absolute;
     border: 1px solid #333;
     z-index: 6;
 }
+/* 矢印モードの始点ハイライトは不要になったため削除 */
