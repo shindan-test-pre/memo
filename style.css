@@ -1,16 +1,20 @@
 * {
     box-sizing: border-box;
 }
+
 html, body {
     height: 100%;
     margin: 0;
 }
+
 body {
     background-color: #f0f0f0; 
     padding: 40px; 
     overflow: hidden; 
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans CJK JP", sans-serif;
+    user-select: none; /* テキスト選択を防止 */
 }
+
 #canvas-container {
     width: 100%;
     height: 100%;
@@ -23,7 +27,14 @@ body {
         linear-gradient(rgba(0, 0, 0, 0.12) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0, 0, 0, 0.12) 1px, transparent 1px);
     background-size: 20px 20px;
+    border-radius: 4px; /* 角の丸み追加 */
+    outline: none; /* フォーカス時のアウトライン除去 */
 }
+
+#canvas-container:focus {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1), 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
 #arrow-svg-layer {
     position: absolute;
     top: 0;
@@ -33,10 +44,13 @@ body {
     pointer-events: none;
     z-index: 7;
 }
+
 .arrow-line {
     stroke: #333;
-    stroke-width: 1;
+    stroke-width: 1.5; /* わずかに太く */
+    stroke-linecap: round; /* 線の端を丸く */
 }
+
 .char-cell, .composing-char {
     position: absolute;
     width: 20px;
@@ -46,12 +60,16 @@ body {
     text-align: center;
     user-select: none;
     z-index: 8;
+    color: #333; /* 明示的な色指定 */
 }
+
 .composing-char {
     text-decoration: underline;
     text-decoration-thickness: 1px;
-    opacity: 0.7;
+    text-decoration-color: #007bff;
+    opacity: 0.8; /* わずかに濃く */
 }
+
 .cursor {
     position: absolute;
     width: 2px;
@@ -59,25 +77,63 @@ body {
     background-color: #007bff;
     animation: blink 1s step-end infinite;
     z-index: 10;
+    border-radius: 1px; /* 角を丸く */
 }
+
 @keyframes blink {
-    50% { opacity: 0; }
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
 }
+
 .hidden-input {
     position: absolute;
     opacity: 0;
     width: 1px;
     height: 1px;
     caret-color: transparent;
+    border: none;
+    outline: none;
+    background: transparent;
+    z-index: -1; /* より明確に背景に */
 }
+
 .selection-highlight {
     position: absolute;
-    background-color: rgba(0, 123, 255, 0.2);
+    background-color: rgba(0, 123, 255, 0.15);
+    border: 1px solid rgba(0, 123, 255, 0.3);
     z-index: 5;
+    border-radius: 2px; /* 角を丸く */
 }
+
 .border-box {
     position: absolute;
-    border: 1px solid #333;
+    border: 1.5px solid #333; /* わずかに太く */
     z-index: 6;
+    border-radius: 2px; /* 角を丸く */
 }
-/* 矢印モードの始点ハイライトは不要になったため削除 */
+
+/* ダークモード対応の準備（コメントアウト） */
+/*
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #2d3748;
+    }
+    
+    #canvas-container {
+        background-color: #1a202c;
+        color: #e2e8f0;
+    }
+    
+    .char-cell, .composing-char {
+        color: #e2e8f0;
+    }
+    
+    .border-box {
+        border-color: #e2e8f0;
+    }
+    
+    .arrow-line {
+        stroke: #e2e8f0;
+    }
+}
+*/
