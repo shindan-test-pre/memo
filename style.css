@@ -87,13 +87,15 @@ body {
     z-index: 5;
 }
 
+/* 【NEW】矢印モードの始点マスをハイライト */
+.arrow-path-start {
+    position: absolute;
+    background-color: rgba(40, 167, 69, 0.2);
+    z-index: 5;
+}
+
 .border-box {
     position: absolute;
     border: 1px solid #333;
     z-index: 6;
-}
-
-.border-box.arrow-start {
-    border: 1px solid #007bff;
-    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
 }
