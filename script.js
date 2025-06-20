@@ -19,12 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 状態管理 ---
     let paperData = {};
     let boxes = [];
-    let arrows = []; // 【修正】軌跡(path)を保存する配列形式に戻しました
+    let arrows = []; // 【修正】軌跡(path)を保存する配列形式
     let nextId = 0;
     let cursorPosition = { x: 0, y: 0 };
     let currentMode = 'normal';
     let selectionStart = null;
-    let currentArrowPath = []; // 【修正】矢印モード中の軌跡を管理します
+    let currentArrowPath = []; // 【修正】矢印モード中の軌跡を管理
     let isComposing = false;
     let compositionText = '';
 
@@ -51,47 +51,22 @@ document.addEventListener('DOMContentLoaded', () => {
         svgLayer.innerHTML = '';
         svgLayer.appendChild(createArrowMarker());
 
+        // 【最終修正】矢印描画ロジックを、単一の<polyline>（一本の繋がった線）で描く方式に刷新
         const drawArrowPath = (path, isPreview = false) => {
-            if (path.length === 0) return;
-            for (let i = 0; i < path.length; i++) {
-                const p_curr = path[i];
-                const p_prev = path[i - 1];
-                const p_next = path[i + 1];
-                const center = { x: p_curr.x + GRID_SIZE / 2, y: p_curr.y + GRID_SIZE / 2 };
-
-                let entryPoint = center, exitPoint = center;
-                if (p_prev) {
-                    if (p_prev.x < p_curr.x) entryPoint = { x: p_curr.x, y: center.y };
-                    else if (p_prev.x > p_curr.x) entryPoint = { x: p_curr.x + GRID_SIZE, y: center.y };
-                    else if (p_prev.y < p_curr.y) entryPoint = { x: center.x, y: p_curr.y };
-                    else if (p_prev.y > p_curr.y) entryPoint = { x: center.x, y: p_curr.y + GRID_SIZE };
-                }
-                if (p_next) {
-                    if (p_next.x > p_curr.x) exitPoint = { x: p_curr.x + GRID_SIZE, y: center.y };
-                    else if (p_next.x < p_curr.x) exitPoint = { x: p_curr.x, y: center.y };
-                    else if (p_next.y > p_curr.y) exitPoint = { x: center.x, y: p_curr.y + GRID_SIZE };
-                    else if (p_next.y < p_curr.y) exitPoint = { x: center.x, y: p_curr.y };
-                }
-                
-                if (!p_prev && !p_next && path.length > 1) continue;
-
-                const svgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                let d;
-                const isStraight = p_prev && p_next && ((p_prev.x === p_curr.x && p_curr.x === p_next.x) || (p_prev.y === p_curr.y && p_curr.y === p_next.y));
-                if (isStraight) {
-                    d = `M ${entryPoint.x} ${entryPoint.y} L ${exitPoint.x} ${exitPoint.y}`;
-                } else {
-                    d = `M ${entryPoint.x} ${entryPoint.y} L ${center.x} ${center.y} L ${exitPoint.x} ${exitPoint.y}`;
-                }
-                svgPath.setAttribute('d', d);
-                svgPath.setAttribute('class', 'arrow-line');
-                svgPath.setAttribute('fill', 'none');
-                if (isPreview) svgPath.style.opacity = '0.5';
-                if (!p_next && !isPreview) svgPath.setAttribute('marker-end', 'url(#arrowhead)');
-                svgLayer.appendChild(svgPath);
+            if (path.length < 2) return;
+            const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            const points = path.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' ');
+            polyline.setAttribute('points', points);
+            polyline.setAttribute('class', 'arrow-line');
+            polyline.setAttribute('fill', 'none');
+            if (isPreview) {
+                polyline.style.opacity = '0.5';
+            } else {
+                polyline.setAttribute('marker-end', 'url(#arrowhead)');
             }
+            svgLayer.appendChild(polyline);
         };
-
+        
         arrows.forEach(arrow => drawArrowPath(arrow.path));
         if (currentMode === 'arrow') drawArrowPath(currentArrowPath, true);
         
@@ -104,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cursorElement.style.left = `${cursorX}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
         container.appendChild(cursorElement);
+
         hiddenInput.style.left = `${cursorX}px`;
         hiddenInput.style.top = `${cursorPosition.y}px`;
         hiddenInput.focus();
@@ -155,13 +131,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (rect) {
                 const boxToDelete = boxes.find(box => box.x === rect.x && box.y === rect.y && box.width === rect.width && box.height === rect.height);
                 if (boxToDelete) { boxes = boxes.filter(box => box.id !== boxToDelete.id); }
-                arrows = arrows.filter(arrow => { const isArrowIntersecting = arrow.path.some(p => p.x >= rect.x && p.x < rect.x + rect.width && p.y >= rect.y && p.y < rect.y + rect.height); return !isArrowIntersecting; });
+                // 【修正】矢印削除ロジックを、新しいデータ構造に対応
+                arrows = arrows.filter(arrow => {
+                    const isArrowIntersecting = arrow.path.some(p => p.x >= rect.x && p.x < rect.x + rect.width && p.y >= rect.y && p.y < rect.y + rect.height);
+                    return !isArrowIntersecting;
+                });
             }
             currentMode = 'normal'; selectionStart = null;
         }
         render();
     }
 
+    // 【修正】矢印モードのロジックを、軌跡を描画する方式に刷新
     function handleArrowModeKeys(e) {
         e.preventDefault();
         const lastPoint = currentArrowPath[currentArrowPath.length - 1];
@@ -194,8 +175,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         render();
     }
-
+    
+    // --- イベントリスナー設定 ---
     const handleTextInput = (text) => { if (text) { for (const char of text) { insertChar(char); } render(); } };
+    container.addEventListener('click', (event) => { const rect = container.getBoundingClientRect(); const x = event.clientX - rect.left + container.scrollLeft; const y = event.clientY - rect.top + container.scrollTop; cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE; cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE; if (currentMode === 'visual' || currentMode === 'arrow') { currentMode = 'normal'; selectionStart = null; currentArrowPath = []; } render(); });
+    hiddenInput.addEventListener('keydown', (e) => { if (isComposing) return; switch (currentMode) { case 'normal': handleNormalModeKeys(e); break; case 'visual': handleVisualModeKeys(e); break; case 'arrow': handleArrowModeKeys(e); break; } });
     hiddenInput.addEventListener('compositionstart', () => { isComposing = true; compositionText = ''; });
     hiddenInput.addEventListener('compositionupdate', (e) => { compositionText = e.data || ''; render(); });
     hiddenInput.addEventListener('compositionend', (e) => { isComposing = false; compositionText = ''; handleTextInput(e.data || ''); e.target.value = ''; });
