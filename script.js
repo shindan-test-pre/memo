@@ -11,14 +11,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- データ管理 ---
     let paperData = {};
     let boxes = [];
-    let arrows = [];
-    let nextBoxId = 0;
+    let arrows = []; // 矢印のデータ構造を変更
+    let nextId = 0; // boxやarrowのIDを払い出すカウンター
 
     // --- 状態管理 ---
     let cursorPosition = { x: 0, y: 0 };
-    let currentMode = 'normal';
+    let currentMode = 'normal'; // 'normal' | 'visual' | 'arrow'
     let selectionStart = null;
-    let arrowStartBoxId = null;
+    let currentArrowPath = []; // 現在描画中の矢印の軌跡データ
 
     let isComposing = false;
     let compositionText = '';
@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cursorElement = document.createElement('div');
     cursorElement.classList.add('cursor');
 
+    // --- 描画関連 ---
     function render() {
         const elementsToRemove = container.querySelectorAll('.char-cell, .cursor, .selection-highlight, .border-box');
         elementsToRemove.forEach(el => el.remove());
@@ -47,35 +48,40 @@ document.addEventListener('DOMContentLoaded', () => {
         defs.appendChild(marker);
         svgLayer.appendChild(defs);
 
+        // 【変更】確定済みの矢印をpolylineで描画
         arrows.forEach(arrow => {
-            const fromBox = boxes.find(b => b.id === arrow.from);
-            const toBox = boxes.find(b => b.id === arrow.to);
-            if (fromBox && toBox) {
-                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                const x1 = fromBox.x + fromBox.width / 2;
-                const y1 = fromBox.y + fromBox.height / 2;
-                const x2 = toBox.x + toBox.width / 2;
-                const y2 = toBox.y + toBox.height / 2;
-                line.setAttribute('x1', x1);
-                line.setAttribute('y1', y1);
-                line.setAttribute('x2', x2);
-                line.setAttribute('y2', y2);
-                line.setAttribute('class', 'arrow-line');
-                line.setAttribute('marker-end', 'url(#arrowhead)');
-                svgLayer.appendChild(line);
+            if (arrow.path.length > 1) {
+                const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+                const points = arrow.path.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' ');
+                polyline.setAttribute('points', points);
+                polyline.setAttribute('class', 'arrow-line');
+                polyline.setAttribute('marker-end', 'url(#arrowhead)');
+                polyline.setAttribute('fill', 'none');
+                svgLayer.appendChild(polyline);
             }
         });
+        
+        // 【NEW】描画中の矢印をリアルタイムで描画
+        if (currentMode === 'arrow' && currentArrowPath.length > 1) {
+            const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            const points = currentArrowPath.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' ');
+            polyline.setAttribute('points', points);
+            polyline.setAttribute('class', 'arrow-line');
+            polyline.setAttribute('marker-end', 'url(#arrowhead)');
+            polyline.setAttribute('fill', 'none');
+            polyline.style.opacity = '0.5'; // 描画中は少し薄くする
+            svgLayer.appendChild(polyline);
+        }
 
+        boxes.forEach(box => { /* ... (変更なし) ... */ });
+        for (const key in paperData) { /* ... (変更なし) ... */ }
+        if (currentMode === 'visual' && selectionStart) { /* ... (変更なし) ... */ }
+        if (isComposing && compositionText) { /* ... (変更なし) ... */ }
+        
+        // (ここから省略部分を展開)
         boxes.forEach(box => {
             const boxEl = document.createElement('div');
             boxEl.classList.add('border-box');
-            if (currentMode === 'arrow' && box.id === arrowStartBoxId) {
-                boxEl.classList.add('arrow-start');
-            }
-            boxEl.style.left = `${box.x}px`;
-            boxEl.style.top = `${box.y}px`;
-            boxEl.style.width = `${box.width}px`;
-            boxEl.style.height = `${box.height}px`;
             container.appendChild(boxEl);
         });
 
@@ -102,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tempX += GRID_SIZE;
             }
         }
-
+        
         const cursorX = cursorPosition.x + (isComposing ? compositionText.length * GRID_SIZE : 0);
         cursorElement.style.left = `${cursorX}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
@@ -111,8 +117,11 @@ document.addEventListener('DOMContentLoaded', () => {
         hiddenInput.style.left = `${cursorX}px`;
         hiddenInput.style.top = `${cursorPosition.y}px`;
         hiddenInput.focus();
+        // (ここまで)
     }
 
+    // --- (省略：createCharCell, getSelectionRectは変更なし) ---
+    // (ここから省略部分を展開)
     function createCharCell(char, x, y, isComposingChar = false) {
         const charCell = document.createElement('div');
         charCell.classList.add('char-cell');
@@ -122,36 +131,64 @@ document.addEventListener('DOMContentLoaded', () => {
         charCell.innerText = char;
         container.appendChild(charCell);
     }
-
+    
     function getSelectionRect() {
         if (!selectionStart) return null;
         const x1 = Math.min(selectionStart.x, cursorPosition.x);
         const y1 = Math.min(selectionStart.y, cursorPosition.y);
         const x2 = Math.max(selectionStart.x, cursorPosition.x);
         const y2 = Math.max(selectionStart.y, cursorPosition.y);
-        return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE };
+        return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE, };
+    }
+    // (ここまで)
+
+    // 【NEW】文字挿入・削除の新しいロジック
+    function insertChar(char) {
+        const currentX = cursorPosition.x;
+        const currentY = cursorPosition.y;
+
+        const charsToShift = Object.keys(paperData).map(key => ({ key, x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) })).filter(item => item.y === currentY && item.x >= currentX).sort((a, b) => b.x - a.x);
+        
+        charsToShift.forEach(item => {
+            paperData[`${item.x + GRID_SIZE},${item.y}`] = paperData[item.key];
+        });
+        
+        paperData[`${currentX},${currentY}`] = char;
+        cursorPosition.x += GRID_SIZE;
     }
 
-    function operateOnLine(y, charIndex, deleteCount, textToInsert = '') {
-        const lineChars = Object.keys(paperData).map(key => ({ x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) })).filter(item => item.y === y).sort((a, b) => a.x - b.x);
-        let lineText = lineChars.map(item => paperData[`${item.x},${item.y}`]).join('');
-        const textArray = lineText.split('');
-        textArray.splice(charIndex, deleteCount, ...textToInsert.split(''));
-        lineText = textArray.join('');
-        lineChars.forEach(item => delete paperData[`${item.x},${item.y}`]);
-        for (let i = 0; i < lineText.length; i++) {
-            paperData[`${i * GRID_SIZE},${y}`] = lineText[i];
-        }
+    function deleteCharBackward() {
+        if (cursorPosition.x === 0) return;
+        
+        const prevX = cursorPosition.x - GRID_SIZE;
+        const currentY = cursorPosition.y;
+        delete paperData[`${prevX},${currentY}`];
+
+        const charsToShift = Object.keys(paperData).map(key => ({ key, x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) })).filter(item => item.y === currentY && item.x >= cursorPosition.x).sort((a, b) => a.x - b.x);
+
+        charsToShift.forEach(item => {
+            paperData[`${item.x - GRID_SIZE},${item.y}`] = paperData[item.key];
+            delete paperData[item.key];
+        });
+        cursorPosition.x = prevX;
     }
 
-    function findBoxAtCursor() {
-        return boxes.find(box =>
-            cursorPosition.x >= box.x && cursorPosition.x < box.x + box.width &&
-            cursorPosition.y >= box.y && cursorPosition.y < box.y + box.height
-        );
+    function deleteCharForward() {
+        const currentX = cursorPosition.x;
+        const currentY = cursorPosition.y;
+        delete paperData[`${currentX},${currentY}`];
+
+        const charsToShift = Object.keys(paperData).map(key => ({ key, x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) })).filter(item => item.y === currentY && item.x > currentX).sort((a, b) => a.x - b.x);
+        
+        charsToShift.forEach(item => {
+            paperData[`${item.x - GRID_SIZE},${item.y}`] = paperData[item.key];
+            delete paperData[item.key];
+        });
     }
 
-    container.addEventListener('click', (event) => {
+    // --- (省略：クリックハンドラは変更なし) ---
+    // (ここから省略部分を展開)
+     container.addEventListener('click', (event) => {
         const rect = container.getBoundingClientRect();
         const x = event.clientX - rect.left + container.scrollLeft;
         const y = event.clientY - rect.top + container.scrollTop;
@@ -160,10 +197,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMode === 'visual' || currentMode === 'arrow') {
             currentMode = 'normal';
             selectionStart = null;
-            arrowStartBoxId = null;
+            currentArrowPath = [];
         }
         render();
     });
+    // (ここまで)
 
     hiddenInput.addEventListener('keydown', (e) => {
         if (isComposing) return;
@@ -173,21 +211,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function handleNormalModeKeys(e) {
-        if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            currentMode = 'visual';
-            selectionStart = { ...cursorPosition };
-            render();
-            return;
-        }
+        if (e.key === 'e' && (e.ctrlKey || e.metaKey)) { /* ... (変更なし) ... */ }
+
+        // 【変更】矢印モードの開始ロジック
         if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
-            const startBox = findBoxAtCursor();
-            if (startBox) {
-                currentMode = 'arrow';
-                arrowStartBoxId = startBox.id;
-                render();
-            }
+            currentMode = 'arrow';
+            currentArrowPath = [{ ...cursorPosition }]; // 現在のカーソル位置を始点とする
+            render();
             return;
         }
 
@@ -198,28 +229,71 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'ArrowDown') cursorPosition.y += GRID_SIZE;
             if (e.key === 'ArrowLeft') cursorPosition.x = Math.max(0, cursorPosition.x - GRID_SIZE);
             if (e.key === 'ArrowRight') cursorPosition.x += GRID_SIZE;
+            
+            // 【変更】Enterは改行ではなく、新しい文字を挿入する
             if (e.key === 'Enter') {
-                const charIndex = Math.floor(cursorPosition.x / GRID_SIZE);
-                operateOnLine(cursorPosition.y, charIndex, 0, '\n');
+                insertChar('\n'); // 見えない改行文字をデータとして挿入
                 cursorPosition.y += GRID_SIZE;
                 cursorPosition.x = 0;
             }
 
-            const charIndex = Math.floor(cursorPosition.x / GRID_SIZE);
-            if (e.key === 'Backspace') {
-                if (cursorPosition.x > 0 || charIndex > 0) {
-                    operateOnLine(cursorPosition.y, charIndex - 1, 1, '');
-                    if (cursorPosition.x > 0) cursorPosition.x -= GRID_SIZE;
-                }
-            }
-            if (e.key === 'Delete') {
-                operateOnLine(cursorPosition.y, charIndex, 1, '');
-            }
+            // 【変更】Backspace と Delete のロジックを新しい関数で呼び出し
+            if (e.key === 'Backspace') deleteCharBackward();
+            if (e.key === 'Delete') deleteCharForward();
+            
             render();
         }
+        // (ここから省略部分を展開)
+        if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            currentMode = 'visual';
+            selectionStart = { ...cursorPosition };
+            render();
+            return;
+        }
+        // (ここまで)
     }
 
-    function handleVisualModeKeys(e) {
+    // 【変更】矢印モードのロジックを全面変更
+    function handleArrowModeKeys(e) {
+        e.preventDefault();
+        let moved = false;
+        const lastPoint = currentArrowPath[currentArrowPath.length - 1];
+
+        if (e.key === 'ArrowUp' && lastPoint.y > 0) {
+            currentArrowPath.push({ x: lastPoint.x, y: lastPoint.y - GRID_SIZE });
+            moved = true;
+        }
+        if (e.key === 'ArrowDown') {
+            currentArrowPath.push({ x: lastPoint.x, y: lastPoint.y + GRID_SIZE });
+            moved = true;
+        }
+        if (e.key === 'ArrowLeft' && lastPoint.x > 0) {
+            currentArrowPath.push({ x: lastPoint.x - GRID_SIZE, y: lastPoint.y });
+            moved = true;
+        }
+        if (e.key === 'ArrowRight') {
+            currentArrowPath.push({ x: lastPoint.x + GRID_SIZE, y: lastPoint.y });
+            moved = true;
+        }
+
+        if (e.key === 'Enter') {
+            if (currentArrowPath.length > 1) {
+                arrows.push({ id: `arrow${nextId++}`, path: currentArrowPath });
+            }
+            currentMode = 'normal';
+            currentArrowPath = [];
+        }
+        if (e.key === 'Escape') {
+            currentMode = 'normal';
+            currentArrowPath = [];
+        }
+        render();
+    }
+    
+    // --- (省略：handleVisualModeKeys, 日本語入力関連は変更なし) ---
+    // (ここから省略部分を展開)
+     function handleVisualModeKeys(e) {
         e.preventDefault();
         const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
         if (arrowKeys.includes(e.key)) {
@@ -231,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') {
             const rect = getSelectionRect();
             if (rect) {
-                boxes.push({ id: `box${nextBoxId++}`, ...rect });
+                boxes.push({ id: `box${nextId++}`, ...rect });
             }
             currentMode = 'normal';
             selectionStart = null;
@@ -250,36 +324,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         render();
     }
-
-    function handleArrowModeKeys(e) {
-        e.preventDefault();
-        const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-        if (arrowKeys.includes(e.key)) {
-            if (e.key === 'ArrowUp') cursorPosition.y = Math.max(0, cursorPosition.y - GRID_SIZE);
-            if (e.key === 'ArrowDown') cursorPosition.y += GRID_SIZE;
-            if (e.key === 'ArrowLeft') cursorPosition.x = Math.max(0, cursorPosition.x - GRID_SIZE);
-            if (e.key === 'ArrowRight') cursorPosition.x += GRID_SIZE;
-        }
-        if (e.key === 'Enter') {
-            const endBox = findBoxAtCursor();
-            if (endBox && endBox.id !== arrowStartBoxId) {
-                arrows.push({ from: arrowStartBoxId, to: endBox.id });
-            }
-            currentMode = 'normal';
-            arrowStartBoxId = null;
-        }
-        if (e.key === 'Escape') {
-            currentMode = 'normal';
-            arrowStartBoxId = null;
-        }
-        render();
-    }
-
+    
     const handleTextInput = (text) => {
         if (text) {
-            const charIndex = Math.floor(cursorPosition.x / GRID_SIZE);
-            operateOnLine(cursorPosition.y, charIndex, 0, text);
-            cursorPosition.x += text.length * GRID_SIZE;
+            for (const char of text) {
+                insertChar(char);
+            }
             render();
         }
     };
@@ -297,6 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
         handleTextInput(e.target.value);
         e.target.value = '';
     });
+    // (ここまで)
 
     render();
 });
