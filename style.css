@@ -47,7 +47,7 @@ body {
 
 .arrow-line {
     stroke: #333;
-    stroke-width: 1.5; /* わずかに太く */
+    stroke-width: 1; /* わずかに太く */
     stroke-linecap: round; /* 線の端を丸く */
 }
 
@@ -107,7 +107,7 @@ body {
 
 .border-box {
     position: absolute;
-    border: 1.5px solid #333; /* わずかに太く */
+    border: 1px solid #333; /* わずかに太く */
     z-index: 6;
     border-radius: 2px; /* 角を丸く */
 }
