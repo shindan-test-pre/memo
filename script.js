@@ -27,8 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
         marker.setAttribute('viewBox', '0 0 10 10');
         marker.setAttribute('refX', '8');
         marker.setAttribute('refY', '5');
-        marker.setAttribute('markerWidth', '4');
-        marker.setAttribute('markerHeight', '4');
+        marker.setAttribute('markerWidth', '5');
+        marker.setAttribute('markerHeight', '5');
         marker.setAttribute('orient', 'auto-start-reverse');
         const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         defs.appendChild(marker);
         svgLayer.appendChild(defs);
 
+        // 【最終修正】矢印描画ロジックを、直線と角を区別する方式に刷新
         const drawArrowPath = (path, isPreview = false) => {
             if (path.length === 0) return;
             for (let i = 0; i < path.length; i++) {
@@ -45,22 +46,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 const p_next = path[i + 1];
                 const center = { x: p_curr.x + GRID_SIZE / 2, y: p_curr.y + GRID_SIZE / 2 };
 
-                const getPort = (from, to) => {
-                    if (!from || !to) return center;
-                    if (to.x > from.x) return { x: from.x + GRID_SIZE, y: center.y };
-                    if (to.x < from.x) return { x: from.x, y: center.y };
-                    if (to.y > from.y) return { x: center.x, y: from.y + GRID_SIZE };
-                    if (to.y < from.y) return { x: center.x, y: from.y };
-                    return center;
-                };
+                let entryPoint = center, exitPoint = center;
 
-                const entryPoint = getPort(p_prev, p_curr);
-                const exitPoint = getPort(p_curr, p_next);
-                
+                if (p_prev) {
+                    if (p_prev.x < p_curr.x) entryPoint = { x: p_curr.x, y: center.y };
+                    else if (p_prev.x > p_curr.x) entryPoint = { x: p_curr.x + GRID_SIZE, y: center.y };
+                    else if (p_prev.y < p_curr.y) entryPoint = { x: center.x, y: p_curr.y };
+                    else if (p_prev.y > p_curr.y) entryPoint = { x: center.x, y: p_curr.y + GRID_SIZE };
+                }
+
+                if (p_next) {
+                    if (p_next.x > p_curr.x) exitPoint = { x: p_curr.x + GRID_SIZE, y: center.y };
+                    else if (p_next.x < p_curr.x) exitPoint = { x: p_curr.x, y: center.y };
+                    else if (p_next.y > p_curr.y) exitPoint = { x: center.x, y: p_curr.y + GRID_SIZE };
+                    else if (p_next.y < p_curr.y) exitPoint = { x: center.x, y: p_curr.y };
+                }
+
                 const svgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 let d;
-
                 const isStraight = p_prev && p_next && ((p_prev.x === p_curr.x && p_curr.x === p_next.x) || (p_prev.y === p_curr.y && p_curr.y === p_next.y));
+                
                 if (isStraight) {
                     d = `M ${entryPoint.x} ${entryPoint.y} L ${exitPoint.x} ${exitPoint.y}`;
                 } else {
@@ -112,4 +117,4 @@ document.addEventListener('DOMContentLoaded', () => {
     hiddenInput.addEventListener('input', (e) => { if (isComposing) return; handleTextInput(e.target.value); e.target.value = ''; });
 
     render();
-});
+});  
