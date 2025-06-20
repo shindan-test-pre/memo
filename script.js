@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         defs.appendChild(marker);
         svgLayer.appendChild(defs);
 
+        // 【修正】矢印描画ロジックを全面刷新
         const drawArrowPath = (path, isPreview = false) => {
             if (path.length < 1) return;
             
@@ -51,24 +52,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (p_prev) {
                     if (p_prev.x < p_curr.x) entryPoint = { x: p_curr.x, y: center.y }; // From Left
-                    if (p_prev.x > p_curr.x) entryPoint = { x: p_curr.x + GRID_SIZE, y: center.y }; // From Right
-                    if (p_prev.y < p_curr.y) entryPoint = { x: center.x, y: p_curr.y }; // From Top
-                    if (p_prev.y > p_curr.y) entryPoint = { x: center.x, y: p_curr.y + GRID_SIZE }; // From Bottom
+                    else if (p_prev.x > p_curr.x) entryPoint = { x: p_curr.x + GRID_SIZE, y: center.y }; // From Right
+                    else if (p_prev.y < p_curr.y) entryPoint = { x: center.x, y: p_curr.y }; // From Top
+                    else if (p_prev.y > p_curr.y) entryPoint = { x: center.x, y: p_curr.y + GRID_SIZE }; // From Bottom
                 }
 
                 if (p_next) {
                     if (p_next.x > p_curr.x) exitPoint = { x: p_curr.x + GRID_SIZE, y: center.y }; // To Right
-                    if (p_next.x < p_curr.x) exitPoint = { x: p_curr.x, y: center.y }; // To Left
-                    if (p_next.y > p_curr.y) exitPoint = { x: center.x, y: p_curr.y + GRID_SIZE }; // To Bottom
-                    if (p_next.y < p_curr.y) exitPoint = { x: center.x, y: p_curr.y }; // To Top
+                    else if (p_next.x < p_curr.x) exitPoint = { x: p_curr.x, y: center.y }; // To Left
+                    else if (p_next.y > p_curr.y) exitPoint = { x: center.x, y: p_curr.y + GRID_SIZE }; // To Bottom
+                    else if (p_next.y < p_curr.y) exitPoint = { x: center.x, y: p_curr.y }; // To Top
                 }
 
-                const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                line.setAttribute('d', `M ${entryPoint.x} ${entryPoint.y} L ${exitPoint.x} ${exitPoint.y}`);
-                line.setAttribute('class', 'arrow-line');
-                if (isPreview) line.style.opacity = '0.5';
-                if (!p_next) line.setAttribute('marker-end', 'url(#arrowhead)'); // 最後の線分にのみ矢印の先端を付ける
-                svgLayer.appendChild(line);
+                const svgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                // L字のコーナーと直線を正しく描画
+                svgPath.setAttribute('d', `M ${entryPoint.x} ${entryPoint.y} L ${center.x} ${center.y} L ${exitPoint.x} ${exitPoint.y}`);
+                svgPath.setAttribute('class', 'arrow-line');
+                svgPath.setAttribute('fill', 'none');
+                
+                if (isPreview) svgPath.style.opacity = '0.5';
+
+                // プレビューではない、かつ最後の線分にのみ矢印の先端を付ける
+                if (!p_next && !isPreview) {
+                    svgPath.setAttribute('marker-end', 'url(#arrowhead)');
+                }
+                svgLayer.appendChild(svgPath);
             }
         };
 
@@ -104,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if ((e.key === 'e' || e.key === 'l') && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; }
-            else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; } // 矢印モード開始時に始点を記録
+            else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; }
             render();
             return;
         }
@@ -120,16 +128,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!lastPoint) { currentMode = 'normal'; render(); return; }
         
         let nextPoint = { ...lastPoint };
-        let moved = false;
-        if (e.key === 'ArrowUp') { nextPoint.y -= GRID_SIZE; moved = true; }
-        else if (e.key === 'ArrowDown') { nextPoint.y += GRID_SIZE; moved = true; }
-        else if (e.key === 'ArrowLeft') { nextPoint.x -= GRID_SIZE; moved = true; }
-        else if (e.key === 'ArrowRight') { nextPoint.x += GRID_SIZE; moved = true; }
-        
-        if (moved) currentArrowPath.push(nextPoint);
-
-        if (e.key === 'Enter') { if (currentArrowPath.length > 1) { arrows.push({ id: `arrow${nextId++}`, path: currentArrowPath }); } currentMode = 'normal'; currentArrowPath = []; }
+        if (e.key === 'ArrowUp' && lastPoint.y > 0) nextPoint.y -= GRID_SIZE;
+        else if (e.key === 'ArrowDown') nextPoint.y += GRID_SIZE;
+        else if (e.key === 'ArrowLeft' && lastPoint.x > 0) nextPoint.x -= GRID_SIZE;
+        else if (e.key === 'ArrowRight') nextPoint.x += GRID_SIZE;
+        else if (e.key === 'Enter') { if (currentArrowPath.length > 0) { arrows.push({ id: `arrow${nextId++}`, path: currentArrowPath }); } currentMode = 'normal'; currentArrowPath = []; }
         else if (e.key === 'Escape') { currentMode = 'normal'; currentArrowPath = []; }
+        
+        if (nextPoint.x !== lastPoint.x || nextPoint.y !== lastPoint.y) currentArrowPath.push(nextPoint);
         render();
     }
     
