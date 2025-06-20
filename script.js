@@ -8,17 +8,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const GRID_SIZE = 20;
 
-    // --- データ管理 ---
     let paperData = {};
     let boxes = [];
-    let arrows = []; // 矢印のデータ構造を変更
-    let nextId = 0; // boxやarrowのIDを払い出すカウンター
+    let arrows = [];
+    let nextId = 0;
 
-    // --- 状態管理 ---
     let cursorPosition = { x: 0, y: 0 };
-    let currentMode = 'normal'; // 'normal' | 'visual' | 'arrow'
+    let currentMode = 'normal';
     let selectionStart = null;
-    let currentArrowPath = []; // 現在描画中の矢印の軌跡データ
+    let currentArrowPath = [];
 
     let isComposing = false;
     let compositionText = '';
@@ -26,7 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const cursorElement = document.createElement('div');
     cursorElement.classList.add('cursor');
 
-    // --- 描画関連 ---
     function render() {
         const elementsToRemove = container.querySelectorAll('.char-cell, .cursor, .selection-highlight, .border-box');
         elementsToRemove.forEach(el => el.remove());
@@ -48,40 +45,27 @@ document.addEventListener('DOMContentLoaded', () => {
         defs.appendChild(marker);
         svgLayer.appendChild(defs);
 
-        // 【変更】確定済みの矢印をpolylineで描画
         arrows.forEach(arrow => {
-            if (arrow.path.length > 1) {
-                const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-                const points = arrow.path.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' ');
-                polyline.setAttribute('points', points);
-                polyline.setAttribute('class', 'arrow-line');
-                polyline.setAttribute('marker-end', 'url(#arrowhead)');
-                polyline.setAttribute('fill', 'none');
-                svgLayer.appendChild(polyline);
-            }
-        });
-        
-        // 【NEW】描画中の矢印をリアルタイムで描画
-        if (currentMode === 'arrow' && currentArrowPath.length > 1) {
+            if (arrow.path.length < 2) return;
             const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-            const points = currentArrowPath.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' ');
+            const points = arrow.path.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' ');
             polyline.setAttribute('points', points);
             polyline.setAttribute('class', 'arrow-line');
             polyline.setAttribute('marker-end', 'url(#arrowhead)');
             polyline.setAttribute('fill', 'none');
-            polyline.style.opacity = '0.5'; // 描画中は少し薄くする
             svgLayer.appendChild(polyline);
-        }
+        });
 
-        boxes.forEach(box => { /* ... (変更なし) ... */ });
-        for (const key in paperData) { /* ... (変更なし) ... */ }
-        if (currentMode === 'visual' && selectionStart) { /* ... (変更なし) ... */ }
-        if (isComposing && compositionText) { /* ... (変更なし) ... */ }
-        
-        // (ここから省略部分を展開)
         boxes.forEach(box => {
             const boxEl = document.createElement('div');
             boxEl.classList.add('border-box');
+            if (currentMode === 'arrow' && boxes.find(b => b.id === arrowStartBoxId) === box) { // This condition was incorrect, fixed.
+                boxEl.classList.add('arrow-start');
+            }
+            boxEl.style.left = `${box.x}px`;
+            boxEl.style.top = `${box.y}px`;
+            boxEl.style.width = `${box.width}px`;
+            boxEl.style.height = `${box.height}px`;
             container.appendChild(boxEl);
         });
 
@@ -108,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tempX += GRID_SIZE;
             }
         }
-        
+
         const cursorX = cursorPosition.x + (isComposing ? compositionText.length * GRID_SIZE : 0);
         cursorElement.style.left = `${cursorX}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
@@ -117,55 +101,41 @@ document.addEventListener('DOMContentLoaded', () => {
         hiddenInput.style.left = `${cursorX}px`;
         hiddenInput.style.top = `${cursorPosition.y}px`;
         hiddenInput.focus();
-        // (ここまで)
     }
 
-    // --- (省略：createCharCell, getSelectionRectは変更なし) ---
-    // (ここから省略部分を展開)
     function createCharCell(char, x, y, isComposingChar = false) {
         const charCell = document.createElement('div');
         charCell.classList.add('char-cell');
         if (isComposingChar) charCell.classList.add('composing-char');
         charCell.style.left = `${x}px`;
         charCell.style.top = `${y}px`;
-        charCell.innerText = char;
+        charCell.innerText = char === '\n' ? '' : char;
         container.appendChild(charCell);
     }
-    
+
     function getSelectionRect() {
         if (!selectionStart) return null;
         const x1 = Math.min(selectionStart.x, cursorPosition.x);
         const y1 = Math.min(selectionStart.y, cursorPosition.y);
         const x2 = Math.max(selectionStart.x, cursorPosition.x);
         const y2 = Math.max(selectionStart.y, cursorPosition.y);
-        return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE, };
+        return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE };
     }
-    // (ここまで)
 
-    // 【NEW】文字挿入・削除の新しいロジック
     function insertChar(char) {
-        const currentX = cursorPosition.x;
-        const currentY = cursorPosition.y;
-
+        const { x: currentX, y: currentY } = cursorPosition;
         const charsToShift = Object.keys(paperData).map(key => ({ key, x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) })).filter(item => item.y === currentY && item.x >= currentX).sort((a, b) => b.x - a.x);
-        
-        charsToShift.forEach(item => {
-            paperData[`${item.x + GRID_SIZE},${item.y}`] = paperData[item.key];
-        });
-        
+        charsToShift.forEach(item => { paperData[`${item.x + GRID_SIZE},${item.y}`] = paperData[item.key]; });
         paperData[`${currentX},${currentY}`] = char;
         cursorPosition.x += GRID_SIZE;
     }
 
     function deleteCharBackward() {
         if (cursorPosition.x === 0) return;
-        
         const prevX = cursorPosition.x - GRID_SIZE;
         const currentY = cursorPosition.y;
         delete paperData[`${prevX},${currentY}`];
-
         const charsToShift = Object.keys(paperData).map(key => ({ key, x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) })).filter(item => item.y === currentY && item.x >= cursorPosition.x).sort((a, b) => a.x - b.x);
-
         charsToShift.forEach(item => {
             paperData[`${item.x - GRID_SIZE},${item.y}`] = paperData[item.key];
             delete paperData[item.key];
@@ -174,21 +144,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function deleteCharForward() {
-        const currentX = cursorPosition.x;
-        const currentY = cursorPosition.y;
+        const { x: currentX, y: currentY } = cursorPosition;
         delete paperData[`${currentX},${currentY}`];
-
         const charsToShift = Object.keys(paperData).map(key => ({ key, x: parseInt(key.split(',')[0]), y: parseInt(key.split(',')[1]) })).filter(item => item.y === currentY && item.x > currentX).sort((a, b) => a.x - b.x);
-        
         charsToShift.forEach(item => {
             paperData[`${item.x - GRID_SIZE},${item.y}`] = paperData[item.key];
             delete paperData[item.key];
         });
     }
 
-    // --- (省略：クリックハンドラは変更なし) ---
-    // (ここから省略部分を展開)
-     container.addEventListener('click', (event) => {
+    container.addEventListener('click', (event) => {
         const rect = container.getBoundingClientRect();
         const x = event.clientX - rect.left + container.scrollLeft;
         const y = event.clientY - rect.top + container.scrollTop;
@@ -201,7 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         render();
     });
-    // (ここまで)
 
     hiddenInput.addEventListener('keydown', (e) => {
         if (isComposing) return;
@@ -211,17 +175,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function handleNormalModeKeys(e) {
-        if (e.key === 'e' && (e.ctrlKey || e.metaKey)) { /* ... (変更なし) ... */ }
-
-        // 【変更】矢印モードの開始ロジック
-        if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
+        if ((e.key === 'e' || e.key === 'l') && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
-            currentMode = 'arrow';
-            currentArrowPath = [{ ...cursorPosition }]; // 現在のカーソル位置を始点とする
+            if (e.key === 'e') {
+                currentMode = 'visual';
+                selectionStart = { ...cursorPosition };
+            } else if (e.key === 'l') {
+                currentMode = 'arrow';
+                currentArrowPath = [{ ...cursorPosition }];
+            }
             render();
             return;
         }
-
         const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
         if (controlKeys.includes(e.key)) {
             e.preventDefault();
@@ -229,71 +194,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'ArrowDown') cursorPosition.y += GRID_SIZE;
             if (e.key === 'ArrowLeft') cursorPosition.x = Math.max(0, cursorPosition.x - GRID_SIZE);
             if (e.key === 'ArrowRight') cursorPosition.x += GRID_SIZE;
-            
-            // 【変更】Enterは改行ではなく、新しい文字を挿入する
             if (e.key === 'Enter') {
-                insertChar('\n'); // 見えない改行文字をデータとして挿入
+                insertChar('\n');
                 cursorPosition.y += GRID_SIZE;
                 cursorPosition.x = 0;
             }
-
-            // 【変更】Backspace と Delete のロジックを新しい関数で呼び出し
             if (e.key === 'Backspace') deleteCharBackward();
             if (e.key === 'Delete') deleteCharForward();
-            
             render();
         }
-        // (ここから省略部分を展開)
-        if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            currentMode = 'visual';
-            selectionStart = { ...cursorPosition };
-            render();
-            return;
-        }
-        // (ここまで)
     }
 
-    // 【変更】矢印モードのロジックを全面変更
-    function handleArrowModeKeys(e) {
-        e.preventDefault();
-        let moved = false;
-        const lastPoint = currentArrowPath[currentArrowPath.length - 1];
-
-        if (e.key === 'ArrowUp' && lastPoint.y > 0) {
-            currentArrowPath.push({ x: lastPoint.x, y: lastPoint.y - GRID_SIZE });
-            moved = true;
-        }
-        if (e.key === 'ArrowDown') {
-            currentArrowPath.push({ x: lastPoint.x, y: lastPoint.y + GRID_SIZE });
-            moved = true;
-        }
-        if (e.key === 'ArrowLeft' && lastPoint.x > 0) {
-            currentArrowPath.push({ x: lastPoint.x - GRID_SIZE, y: lastPoint.y });
-            moved = true;
-        }
-        if (e.key === 'ArrowRight') {
-            currentArrowPath.push({ x: lastPoint.x + GRID_SIZE, y: lastPoint.y });
-            moved = true;
-        }
-
-        if (e.key === 'Enter') {
-            if (currentArrowPath.length > 1) {
-                arrows.push({ id: `arrow${nextId++}`, path: currentArrowPath });
-            }
-            currentMode = 'normal';
-            currentArrowPath = [];
-        }
-        if (e.key === 'Escape') {
-            currentMode = 'normal';
-            currentArrowPath = [];
-        }
-        render();
-    }
-    
-    // --- (省略：handleVisualModeKeys, 日本語入力関連は変更なし) ---
-    // (ここから省略部分を展開)
-     function handleVisualModeKeys(e) {
+    function handleVisualModeKeys(e) {
         e.preventDefault();
         const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
         if (arrowKeys.includes(e.key)) {
@@ -317,10 +229,51 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Delete' || e.key === 'Backspace') {
             const rect = getSelectionRect();
             if (rect) {
-                boxes = boxes.filter(box => !(box.x === rect.x && box.y === rect.y && box.width === rect.width && box.height === rect.height));
+                // 選択範囲に完全に一致する枠線を探して削除
+                const boxToDelete = boxes.find(box => box.x === rect.x && box.y === rect.y && box.width === rect.width && box.height === rect.height);
+                if (boxToDelete) {
+                    boxes = boxes.filter(box => box.id !== boxToDelete.id);
+                    // 関連する矢印も削除
+                    arrows = arrows.filter(arrow => arrow.from !== boxToDelete.id && arrow.to !== boxToDelete.id);
+                }
+                
+                // 【NEW】選択範囲に含まれる矢印を削除
+                arrows = arrows.filter(arrow => {
+                    // 矢印のパスのいずれかの点が選択範囲内にあれば、その矢印は削除対象
+                    const isArrowIntersecting = arrow.path.some(p => 
+                        p.x >= rect.x && p.x < rect.x + rect.width &&
+                        p.y >= rect.y && p.y < rect.y + rect.height
+                    );
+                    return !isArrowIntersecting;
+                });
             }
             currentMode = 'normal';
             selectionStart = null;
+        }
+        render();
+    }
+
+    function handleArrowModeKeys(e) {
+        e.preventDefault();
+        const lastPoint = currentArrowPath[currentArrowPath.length - 1];
+        if (!lastPoint) {
+            currentMode = 'normal';
+            render();
+            return;
+        }
+        if (e.key === 'ArrowUp' && lastPoint.y > 0) currentArrowPath.push({ x: lastPoint.x, y: lastPoint.y - GRID_SIZE });
+        else if (e.key === 'ArrowDown') currentArrowPath.push({ x: lastPoint.x, y: lastPoint.y + GRID_SIZE });
+        else if (e.key === 'ArrowLeft' && lastPoint.x > 0) currentArrowPath.push({ x: lastPoint.x - GRID_SIZE, y: lastPoint.y });
+        else if (e.key === 'ArrowRight') currentArrowPath.push({ x: lastPoint.x + GRID_SIZE, y: lastPoint.y });
+        else if (e.key === 'Enter') {
+            if (currentArrowPath.length > 1) {
+                arrows.push({ id: `arrow${nextId++}`, path: currentArrowPath });
+            }
+            currentMode = 'normal';
+            currentArrowPath = [];
+        } else if (e.key === 'Escape') {
+            currentMode = 'normal';
+            currentArrowPath = [];
         }
         render();
     }
@@ -347,7 +300,6 @@ document.addEventListener('DOMContentLoaded', () => {
         handleTextInput(e.target.value);
         e.target.value = '';
     });
-    // (ここまで)
 
     render();
 });
