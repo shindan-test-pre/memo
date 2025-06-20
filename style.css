@@ -46,7 +46,7 @@ body {
 }
 
 .arrow-line {
-    stroke: #888; /* 色を薄くして繊細に */
+    stroke: #555; /* 色を薄くして繊細に */
     stroke-width: 1;
     stroke-linecap: round;
 }
@@ -107,7 +107,7 @@ body {
 
 .border-box {
     position: absolute;
-    border: 1px solid #888; /* 色を薄くして繊細に */
+    border: 1px solid #555; /* 色を薄くして繊細に */
     z-index: 6;
     border-radius: 2px;
 }
