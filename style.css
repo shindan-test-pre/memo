@@ -234,3 +234,8 @@ body {
     color: #555;
     padding-bottom: 8px;
 }
+
+/* --- 文字色用のスタイル --- */
+.text-red { color: #D32F2F; }
+.text-green { color: #388E3C; }
+.text-blue { color: #1976D2; }
