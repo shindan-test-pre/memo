@@ -153,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
                 case 'Enter':
                     cursorPosition.y += GRID_SIZE;
-                    cursorPosition.s = 0;
+                    cursorPosition.x = 0;
                     break;
                 case 'Backspace': deleteCharBackward(); break;
                 case 'Delete': deleteCharForward(); break;
