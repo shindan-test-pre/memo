@@ -44,6 +44,31 @@ document.addEventListener('DOMContentLoaded', () => {
     function deleteCharForward() { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); const currentY = cursorPosition.y; delete paperData[currentKey]; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x > cursorPosition.x).sort((a, b) => a.x - b.x); charsToShift.forEach(item => { const newKey = positionToKey(item.x - GRID_SIZE, item.y); paperData[newKey] = paperData[positionToKey(item.x, item.y)]; delete paperData[positionToKey(item.x, item.y)]; }); }
     function updateCanvasSize() { const buffer = 300; let maxX = 0; let maxY = 0; const allPositions = [ ...Object.keys(paperData).map(parsePosition), ...boxes.flatMap(b => [{x: b.x + b.width, y: b.y + b.height}]), ...arrows.flatMap(a => a.path) ].filter(p => p); allPositions.forEach(p => { if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }); const newWidth = maxX + buffer; const newHeight = maxY + buffer; const minWidth = container.parentNode.clientWidth; const minHeight = container.parentNode.clientHeight; container.style.width = `${Math.max(minWidth, newWidth)}px`; container.style.height = `${Math.max(minHeight, newHeight)}px`; svgLayer.setAttribute('width', container.scrollWidth); svgLayer.setAttribute('height', container.scrollHeight); }
 
+    /** メモ全体をリセットする関数 */
+    function resetMemo() {
+        if (confirm('すべてのメモ内容が消去され、元に戻せません。\n本当によろしいですか？')) {
+            // 1. 全てのデータオブジェクトを初期状態に戻す
+            paperData = {};
+            boxes = [];
+            arrows = [];
+            nextId = 0;
+            cursorPosition = { x: 0, y: 0 };
+            currentMode = 'normal'; // モードもノーマルに戻す
+            selectionStart = null;
+            currentArrowPath = [];
+
+            // 2. ブラウザのストレージからもデータを削除する
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
+            
+            // 3. 画面を再描画して、白紙の状態を表示する
+            render();
+            
+            console.log("メモがリセットされました。");
+        } else {
+            console.log("リセットがキャンセルされました。");
+        }
+    }
+    
     /** メイン描画関数 */
     function render() {
         const elementsToRemove = container.querySelectorAll('.char-cell, .cursor, .selection-highlight, .border-box');
@@ -222,16 +247,28 @@ document.addEventListener('DOMContentLoaded', () => {
     hiddenInput.addEventListener('input', (e) => { if (isComposing) return; handleTextInput(e.target.value); e.target.value = ''; });
 
     // アプリのフォーカス状態に関わらず、ショートカットキーを捕捉する
-    window.addEventListener('keydown', (e) => {
-        // Ctrl+S (保存) または Ctrl+O (開く) が押された場合
-        if ((e.key === 's' || e.key === 'o') && (e.ctrlKey || e.metaKey)) {
-            // 1. ブラウザのデフォルトの動作（保存画面やファイル選択画面を開く）を停止させる
-            e.preventDefault();
-            
-            // 2. アプリの入力欄に強制的にフォーカスを移動させて、後続のキー処理が実行されるようにする
-            hiddenInput.focus();
-        }
-    });
+window.addEventListener('keydown', (e) => {
+
+    // --- ショートカットキーその1：保存・読み込み ---
+    if ((e.key === 's' || e.key === 'o') && (e.ctrlKey || e.metaKey)) {
+        // 1. ブラウザのデフォルトの動作を停止させる
+        e.preventDefault();
+        // 2. アプリの入力欄にフォーカスを移動させる
+        hiddenInput.focus();
+    }
+
+    // --- ショートカットキーその2：リセット (↑のif文とは別に、並べて書く) ---
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Backspace') {
+        // デフォルト動作をキャンセル
+        e.preventDefault();
+        
+        // リセット関数を呼び出す
+        resetMemo();
+        
+        // リセット処理をしたら他のキー処理は不要なのでここで終了
+        return; 
+    }
+});
     
     // --- 初期化 --
 loadFromLocalStorage(); // 1. まずデータの読み込みを試行する
