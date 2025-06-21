@@ -237,4 +237,5 @@ document.addEventListener('DOMContentLoaded', () => {
 loadFromLocalStorage(); // 1. まずデータの読み込みを試行する
 render();               // 2. その後、必ず画面を描画する
 container.focus();
+window.scrollTo(0, 0);
 });
