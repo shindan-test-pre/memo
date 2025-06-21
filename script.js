@@ -217,92 +217,83 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-// script.js の handleVisualModeKeys 関数を、以下の内容に丸ごと置き換えてください
-
-function handleVisualModeKeys(e) {
-    // 【★最終修正点★】Escキーの処理を、より堅牢なものに書き換えます
-    if (e.key === 'Escape') {
+    // 【★最終調整★】選択モードでの操作は、すべてノーマルモードに戻るように統一
+    function handleVisualModeKeys(e) {
         e.preventDefault();
-        e.stopPropagation(); // 他のイベントへの伝播を完全に停止
+    
+        const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
 
-        hiddenInput.blur(); // フォーカスを外し、IMEの未確定文字などをリセット
-
-        // 状態を確実にノーマルモードに戻す
-        currentMode = 'normal';
-        selectionStart = null;
-        isComposing = false;
-        compositionText = '';
-
-        render(); // 再描画（この中で再度フォーカスが設定されます）
+        // Escキー：ノーマルモードに戻る
+        if (e.key === 'Escape') {
+            hiddenInput.blur();
+            currentMode = 'normal';
+            selectionStart = null;
         
-        // 念のため、イベントループの最後に再度フォーカスを試みる
-        setTimeout(() => hiddenInput.focus(), 0);
-        return;
-    }
+        // Enterキー：枠線を作成し、ノーマルモードに戻る
+        } else if (e.key === 'Enter') {
+            const rect = getSelectionRect();
+            if (rect) {
+                boxes.push({ id: `box${nextId++}`, ...rect });
+            }
+            currentMode = 'normal';
+            selectionStart = null;
+            saveToLocalStorage();
 
-    // --- 以下は既存の正常なロジック ---
-    e.preventDefault();
-
-    const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
-
-    if (colorKeys[e.code] || e.code === 'KeyD') {
-        const rect = getSelectionRect();
-        if (rect) {
-            for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
-                for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
-                    const key = positionToKey(x, y);
-                    if (paperData[key]) {
-                        if (e.code === 'KeyD') {
-                            delete colorData[key];
-                        } else {
-                            colorData[key] = colorKeys[e.code];
+        // 色変更キー：色を変更し、ノーマルモードに戻る
+        } else if (colorKeys[e.code] || e.code === 'KeyD') {
+            const rect = getSelectionRect();
+            if (rect) {
+                for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
+                    for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
+                        const key = positionToKey(x, y);
+                        if (paperData[key]) {
+                            if (e.code === 'KeyD') {
+                                delete colorData[key];
+                            } else {
+                                colorData[key] = colorKeys[e.code];
+                            }
                         }
                     }
                 }
             }
-        }
-        currentMode = 'normal';
-        selectionStart = null;
-        saveToLocalStorage();
-    } else if (ARROW_DIRECTIONS[e.key]) { 
-        switch (e.key) {
-            case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
-            case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
-            case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
-            case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-        }
-    } else if (e.key === 'Enter') {
-        const rect = getSelectionRect();
-        if (rect) {
-            boxes.push({ id: `box${nextId++}`, ...rect });
-        }
-        currentMode = 'normal';
-        selectionStart = null;
-        saveToLocalStorage();
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        const rect = getSelectionRect();
-        if (rect) {
-            boxes = boxes.filter(box => 
-                !(box.x >= rect.x && 
-                  box.y >= rect.y &&
-                  (box.x + box.width) <= (rect.x + rect.width) &&
-                  (box.y + box.height) <= (rect.y + rect.height))
-            );
-            arrows = arrows.filter(arrow => {
-                const isArrowIntersecting = arrow.path.some(p => 
-                    p.x >= rect.x && p.x < rect.x + rect.width && 
-                    p.y >= rect.y && p.y < rect.y + rect.height
+            currentMode = 'normal';
+            selectionStart = null;
+            saveToLocalStorage();
+        
+        // Delete/Backspaceキー：削除し、ノーマルモードに戻る
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+            const rect = getSelectionRect();
+            if (rect) {
+                boxes = boxes.filter(box => 
+                    !(box.x >= rect.x && 
+                      box.y >= rect.y &&
+                      (box.x + box.width) <= (rect.x + rect.width) &&
+                      (box.y + box.height) <= (rect.y + rect.height))
                 );
-                return !isArrowIntersecting;
-            });
+                arrows = arrows.filter(arrow => {
+                    const isArrowIntersecting = arrow.path.some(p => 
+                        p.x >= rect.x && p.x < rect.x + rect.width && 
+                        p.y >= rect.y && p.y < rect.y + rect.height
+                    );
+                    return !isArrowIntersecting;
+                });
+            }
+            currentMode = 'normal';
+            selectionStart = null;
+            saveToLocalStorage();
+            
+        // 矢印キー：範囲を拡大する（モードは維持）
+        } else if (ARROW_DIRECTIONS[e.key]) { 
+            switch (e.key) {
+                case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
+                case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
+                case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
+                case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
+            }
         }
-        currentMode = 'normal';
-        selectionStart = null;
-        saveToLocalStorage();
+        
+        render();
     }
-    
-    render();
-}
     
     function handleArrowModeKeys(e) {
         e.preventDefault();
@@ -336,9 +327,8 @@ function handleVisualModeKeys(e) {
         render();
     }
 
-    // 【★修正箇所★】handleTextInput 関数を修正
     function handleTextInput(text) {
-        if (currentMode !== 'normal') return; // ノーマルモード以外では文字入力を無視
+        if (currentMode !== 'normal') return; 
         if (text) {
             for (const char of text) {
                 insertChar(char);
@@ -356,7 +346,6 @@ function handleVisualModeKeys(e) {
             }
             return;
         }
-
         if ((e.ctrlKey || e.metaKey)) {
             if (e.key === 's' || e.key === 'o') {
                 e.preventDefault();
