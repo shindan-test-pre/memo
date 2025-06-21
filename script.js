@@ -218,6 +218,18 @@ document.addEventListener('DOMContentLoaded', () => {
     hiddenInput.addEventListener('compositionend', (e) => { isComposing = false; compositionText = ''; handleTextInput(e.data || ''); e.target.value = ''; });
     hiddenInput.addEventListener('input', (e) => { if (isComposing) return; handleTextInput(e.target.value); e.target.value = ''; });
 
+    // アプリのフォーカス状態に関わらず、ショートカットキーを捕捉する
+    window.addEventListener('keydown', (e) => {
+        // Ctrl+S (保存) または Ctrl+O (開く) が押された場合
+        if ((e.key === 's' || e.key === 'o') && (e.ctrlKey || e.metaKey)) {
+            // 1. ブラウザのデフォルトの動作（保存画面やファイル選択画面を開く）を停止させる
+            e.preventDefault();
+            
+            // 2. アプリの入力欄に強制的にフォーカスを移動させて、後続のキー処理が実行されるようにする
+            hiddenInput.focus();
+        }
+    });
+    
     // --- 初期化 ---
     if (!loadFromLocalStorage()) {
         render();
