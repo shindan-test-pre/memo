@@ -14,6 +14,64 @@
     <div id="canvas-container" role="textbox" aria-label="メモキャンバス" tabindex="0">
         <svg id="arrow-svg-layer" aria-hidden="true"></svg>
     </div>
+    <div id="help-modal" class="modal-overlay" aria-hidden="true" role="dialog">
+        <div class="modal-content" role="document">
+            <button id="close-help-modal" class="close-button" aria-label="閉じる">&times;</button>
+            <h2>コマンド一覧</h2>
+            <div class="help-grid">
+                <section>
+                    <h3>基本操作 (ノーマルモード)</h3>
+                    <dl>
+                        <dt>文字入力</dt><dd>キーボードで直接入力</dd>
+                        <dt>カーソル移動</dt><dd>↑ ↓ ← →</dd>
+                        <dt>改行</dt><dd>Enter</dd>
+                        <dt>文字削除</dt><dd>Backspace / Delete</dd>
+                    </dl>
+                </section>
+                <section>
+                    <h3>モード切替</h3>
+                    <dl>
+                        <dt>選択モードへ</dt><dd>Ctrl / Cmd + E</dd>
+                        <dt>矢印モードへ</dt><dd>Ctrl / Cmd + L</dd>
+                        <dt>ノーマルモードへ</dt><dd>Esc (各モードから)</dd>
+                    </dl>
+                </section>
+                <section>
+                    <h3>選択モード</h3>
+                    <dl>
+                        <dt>範囲選択</dt><dd>↑ ↓ ← →</dd>
+                        <dt>枠線を作成</dt><dd>Enter</dd>
+                        <dt>枠線・矢印を削除</dt><dd>Backspace / Delete</dd>
+                    </dl>
+                </section>
+                <section>
+                    <h3>矢印モード</h3>
+                    <dl>
+                        <dt>軌跡を描画</dt><dd>↑ ↓ ← →</dd>
+                        <dt>矢印を確定</dt><dd>Enter</dd>
+                        <dt>描画をキャンセル</dt><dd>Esc</dd>
+                    </dl>
+                </section>
+                 <section>
+                    <h3>ファイル操作</h3>
+                    <dl>
+                        <dt>名前を付けて保存</dt><dd>Ctrl / Cmd + S</dd>
+                        <dt>ファイルを開く</dt><dd>Ctrl / Cmd + O</dd>
+                        <dt>全リセット</dt><dd>Ctrl / Cmd + Shift + Backspace</dd>
+                    </dl>
+                </section>
+                 <section>
+                    <h3>ヘルプ</h3>
+                    <dl>
+                        <dt>この一覧を表示</dt><dd>? (Shift + /)</dd>
+                        <dt>閉じる</dt><dd>Esc</dd>
+                    </dl>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
