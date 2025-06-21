@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM要素の取得
     const container = document.getElementById('canvas-container');
     const svgLayer = document.getElementById('arrow-svg-layer');
-    // 【追加】ヘルプモーダル用のDOM要素
     const helpModal = document.getElementById('help-modal');
     const closeHelpModalBtn = document.getElementById('close-help-modal');
     
@@ -42,24 +41,22 @@ document.addEventListener('DOMContentLoaded', () => {
     function moveCursor(dx, dy) { cursorPosition.x = Math.max(0, cursorPosition.x + dx); cursorPosition.y = Math.max(0, cursorPosition.y + dy); }
     function createArrowMarker() { const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker'); marker.id = 'arrowhead'; marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5'); marker.setAttribute('markerWidth', '5'); marker.setAttribute('markerHeight', '5'); marker.setAttribute('orient', 'auto-start-reverse'); const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); pathEl.setAttribute('fill', '#333'); marker.appendChild(pathEl); defs.appendChild(marker); return defs; }
     
-    // createCharCell 関数を丸ごと置き換え
-function createCharCell(char, x, y, isComposingChar = false) {
-    const charCell = document.createElement('div');
-    charCell.className = 'char-cell'; // classList.add の代わりに className で初期化
-    if (isComposingChar) {
-        charCell.classList.add('composing-char');
+    function createCharCell(char, x, y, isComposingChar = false) {
+        const charCell = document.createElement('div');
+        charCell.className = 'char-cell';
+        if (isComposingChar) {
+            charCell.classList.add('composing-char');
+        }
+        const key = positionToKey(x, y);
+        const color = colorData[key];
+        if (color) {
+            charCell.classList.add(`text-${color}`);
+        }
+        charCell.style.left = `${x}px`;
+        charCell.style.top = `${y}px`;
+        charCell.innerText = char === '\n' ? '' : char;
+        container.appendChild(charCell);
     }
-    // colorData から色情報を取得
-    const key = positionToKey(x, y);
-    const color = colorData[key];
-    if (color) {
-        charCell.classList.add(`text-${color}`);
-    }
-    charCell.style.left = `${x}px`;
-    charCell.style.top = `${y}px`;
-    charCell.innerText = char === '\n' ? '' : char;
-    container.appendChild(charCell);
-}
     
     function getSelectionRect() { if (!selectionStart) return null; const x1 = Math.min(selectionStart.x, cursorPosition.x); const y1 = Math.min(selectionStart.y, cursorPosition.y); const x2 = Math.max(selectionStart.x, cursorPosition.x); const y2 = Math.max(selectionStart.y, cursorPosition.y); return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE }; }
     function insertChar(char) { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); const currentY = cursorPosition.y; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x >= cursorPosition.x).sort((a, b) => b.x - a.x); charsToShift.forEach(item => { const newKey = positionToKey(item.x + GRID_SIZE, item.y); paperData[newKey] = paperData[positionToKey(item.x, item.y)]; delete paperData[positionToKey(item.x, item.y)]; }); paperData[currentKey] = char; moveCursor(GRID_SIZE, 0); }
@@ -87,26 +84,25 @@ function createCharCell(char, x, y, isComposingChar = false) {
         }
     }
 
-/** PDF書き出し（印刷プレビュー）を呼び出す関数 */
-function exportToPdf() {
-    console.log("PDF書き出しを開始します...");
-    window.print();
-}
+    /** PDF書き出し（印刷プレビュー）を呼び出す関数 */
+    function exportToPdf() {
+        console.log("PDF書き出しを開始します...");
+        window.print();
+    }
 
-    // 【追加】ヘルプモーダルを開閉する関数
     /** ヘルプモーダルを開く関数 */
     function openHelpModal() {
-        currentMode = 'modal'; // モードをモーダルに変更
+        currentMode = 'modal';
         helpModal.classList.add('is-visible');
         helpModal.setAttribute('aria-hidden', 'false');
     }
 
     /** ヘルプモーダルを閉じる関数 */
     function closeHelpModal() {
-        currentMode = 'normal'; // モードをノーマルに戻す
+        currentMode = 'normal';
         helpModal.classList.remove('is-visible');
         helpModal.setAttribute('aria-hidden', 'true');
-        container.focus(); // モーダルを閉じたらキャンバスにフォーカスを戻す
+        container.focus();
     }
     
     /** メイン描画関数 */
@@ -194,7 +190,6 @@ function exportToPdf() {
 
     // --- キーボードイベントハンドラ ---
     function handleNormalModeKeys(e) {
-        // Ctrl+S/Oはグローバルハンドラに移動したため、ここでの処理は不要
         if ((e.key === 'e' || e.key === 'l') && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; } 
@@ -222,92 +217,72 @@ function exportToPdf() {
         }
     }
 
-    // script.js の handleVisualModeKeys 関数を、以下の内容に丸ごと置き換えてください
-
-function handleVisualModeKeys(e) {
-    e.preventDefault();
-
-    // 【修正点1】キー判定を e.key から e.code に変更し、IMEの影響を回避
-    const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
-
-    if (colorKeys[e.code] || e.code === 'KeyD') { // e.key -> e.code
-        const rect = getSelectionRect();
-        if (rect) {
-            for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
-                for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
-                    const key = positionToKey(x, y);
-                    if (paperData[key]) {
-                        if (e.code === 'KeyD') { // e.key -> e.code
-                            delete colorData[key];
-                        } else {
-                            colorData[key] = colorKeys[e.code]; // e.key -> e.code
+    // 【★修正箇所★】handleVisualModeKeys 関数を完全に修正
+    function handleVisualModeKeys(e) {
+        e.preventDefault();
+    
+        const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
+    
+        if (colorKeys[e.code] || e.code === 'KeyD') {
+            const rect = getSelectionRect();
+            if (rect) {
+                for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
+                    for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
+                        const key = positionToKey(x, y);
+                        if (paperData[key]) {
+                            if (e.code === 'KeyD') {
+                                delete colorData[key];
+                            } else {
+                                colorData[key] = colorKeys[e.code];
+                            }
                         }
                     }
                 }
             }
-        }
-        currentMode = 'normal';
-        selectionStart = null;
-        saveToLocalStorage();
-
-    // 【修正点2】ここから下の、従来の処理が抜けていたのを修正
-    } else if (ARROW_DIRECTIONS[e.key]) { 
-        switch (e.key) {
-            case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
-            case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
-            case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
-            case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-        }
-    } else if (e.key === 'Enter') {
-        const rect = getSelectionRect();
-        if (rect) {
-            boxes.push({ id: `box${nextId++}`, ...rect });
-        }
-        currentMode = 'normal';
-        selectionStart = null;
-        saveToLocalStorage();
-    } else if (e.key === 'Escape') {
-        currentMode = 'normal';
-        selectionStart = null;
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        const rect = getSelectionRect();
-        if (rect) {
-            // 包含判定に修正した、より良い削除ロジック
-            boxes = boxes.filter(box => 
-                !(box.x >= rect.x && 
-                  box.y >= rect.y &&
-                  (box.x + box.width) <= (rect.x + rect.width) &&
-                  (box.y + box.height) <= (rect.y + rect.height))
-            );
-            arrows = arrows.filter(arrow => {
-                const isArrowIntersecting = arrow.path.some(p => 
-                    p.x >= rect.x && p.x < rect.x + rect.width && 
-                    p.y >= rect.y && p.y < rect.y + rect.height
+            currentMode = 'normal';
+            selectionStart = null;
+            saveToLocalStorage();
+        } else if (ARROW_DIRECTIONS[e.key]) { 
+            switch (e.key) {
+                case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
+                case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
+                case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
+                case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
+            }
+        } else if (e.key === 'Enter') {
+            const rect = getSelectionRect();
+            if (rect) {
+                boxes.push({ id: `box${nextId++}`, ...rect });
+            }
+            currentMode = 'normal';
+            selectionStart = null;
+            saveToLocalStorage();
+        } else if (e.key === 'Escape') {
+            currentMode = 'normal';
+            selectionStart = null;
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+            const rect = getSelectionRect();
+            if (rect) {
+                boxes = boxes.filter(box => 
+                    !(box.x >= rect.x && 
+                      box.y >= rect.y &&
+                      (box.x + box.width) <= (rect.x + rect.width) &&
+                      (box.y + box.height) <= (rect.y + rect.height))
                 );
-                return !isArrowIntersecting;
-            });
+                arrows = arrows.filter(arrow => {
+                    const isArrowIntersecting = arrow.path.some(p => 
+                        p.x >= rect.x && p.x < rect.x + rect.width && 
+                        p.y >= rect.y && p.y < rect.y + rect.height
+                    );
+                    return !isArrowIntersecting;
+                });
+            }
+            currentMode = 'normal';
+            selectionStart = null;
+            saveToLocalStorage();
         }
-        currentMode = 'normal';
-        selectionStart = null;
-        saveToLocalStorage();
+        render();
     }
-
-    // 最後に一度だけ描画する
-    render();
-}
-
-    // ↓↓↓ 以下は既存の処理 ↓↓↓
-    if (ARROW_DIRECTIONS[e.key]) { 
-        // ... (矢印キーでの範囲選択処理、変更なし)
-    } else if (e.key === 'Enter') {
-        // ... (Enterキーでの枠線作成処理、変更なし)
-    } else if (e.key === 'Escape') { 
-        // ... (Escapeキーでのキャンセル処理、変更なし)
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        // ... (Deleteキーでの削除処理、変更なし)
-    }
-    render();
-}
     
     function handleArrowModeKeys(e) {
         e.preventDefault();
@@ -341,25 +316,31 @@ function handleVisualModeKeys(e) {
         render();
     }
 
-    function handleTextInput(text) { if (text) { for (const char of text) { insertChar(char); } render(); saveToLocalStorage(); } }
+    // 【★修正箇所★】handleTextInput 関数を修正
+    function handleTextInput(text) {
+        if (currentMode !== 'normal') return; // ノーマルモード以外では文字入力を無視
+        if (text) {
+            for (const char of text) {
+                insertChar(char);
+            }
+            render();
+            saveToLocalStorage();
+        }
+    }
 
-    // 【修正】グローバルなキー操作と、hiddenInputへの入力を分ける
-    
-    // アプリケーションがフォーカスされていない状態でも捕捉したいショートカットキー
+    // --- イベントリスナー群 ---
     window.addEventListener('keydown', (e) => {
-        // モーダル表示中はEscキー以外はほぼ無効化
         if (currentMode === 'modal') {
             if (e.key === 'Escape') {
                 closeHelpModal();
             }
-            return; // 他のキー操作は受け付けない
+            return;
         }
 
-        // --- グローバルショートカット ---
         if ((e.ctrlKey || e.metaKey)) {
             if (e.key === 's' || e.key === 'o') {
                 e.preventDefault();
-                hiddenInput.focus(); // 実際の処理はhiddenInputのハンドラに任せる
+                hiddenInput.focus();
             }
             if (e.shiftKey && e.key === 'Backspace') {
                 e.preventDefault();
@@ -369,9 +350,7 @@ function handleVisualModeKeys(e) {
                 e.preventDefault();
                 openHelpModal();
             }
-
-// --- ショートカットキーその4：PDF書き出し ---
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+            if (e.shiftKey && e.key.toLowerCase() === 'p') {
                 e.preventDefault();
                 exportToPdf();
             }
@@ -380,18 +359,14 @@ function handleVisualModeKeys(e) {
 
     container.addEventListener('click', (event) => { const rect = container.getBoundingClientRect(); const x = event.clientX - rect.left + container.scrollLeft; const y = event.clientY - rect.top + container.scrollTop; cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE; cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE; if (currentMode === 'visual' || currentMode === 'arrow') { currentMode = 'normal'; selectionStart = null; currentArrowPath = []; } render(); });
     
-    // hiddenInputがフォーカスされている時のキー操作
     hiddenInput.addEventListener('keydown', (e) => {
         if (isComposing || currentMode === 'modal') return;
-
-        // 保存・読み込みのショートカットをこちらでも処理
         if ((e.key === 's' || e.key === 'o') && (e.ctrlKey || e.metaKey)) {
              e.preventDefault();
              if (e.key === 's') exportToFile();
              if (e.key === 'o') importFromFile();
              return;
         }
-
         switch (currentMode) {
             case 'normal': handleNormalModeKeys(e); break;
             case 'visual': handleVisualModeKeys(e); break;
@@ -404,7 +379,6 @@ function handleVisualModeKeys(e) {
     hiddenInput.addEventListener('compositionend', (e) => { isComposing = false; compositionText = ''; handleTextInput(e.data || ''); e.target.value = ''; });
     hiddenInput.addEventListener('input', (e) => { if (isComposing) return; handleTextInput(e.target.value); e.target.value = ''; });
 
-    // 【追加】ヘルプモーダル用のクリックイベントリスナー
     closeHelpModalBtn.addEventListener('click', closeHelpModal);
     helpModal.addEventListener('click', (e) => {
         if (e.target === helpModal) {
