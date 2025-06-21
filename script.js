@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentArrowPath = [];
     let isComposing = false;
     let compositionText = '';
+    let blockNextInput = false; // 【★追加★】入力ブロック用のフラグ
 
     const cursorElement = document.createElement('div');
     cursorElement.classList.add('cursor');
@@ -217,29 +218,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 【★最終調整★】選択モードでの操作は、すべてノーマルモードに戻るように統一
     function handleVisualModeKeys(e) {
         e.preventDefault();
     
         const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
 
-        // Escキー：ノーマルモードに戻る
+        // 各コマンド実行後に、次の入力をブロックするフラグを立てる関数
+        const executeCommand = () => {
+            currentMode = 'normal';
+            selectionStart = null;
+            saveToLocalStorage();
+            blockNextInput = true;
+            setTimeout(() => { blockNextInput = false; }, 0);
+        };
+
         if (e.key === 'Escape') {
             hiddenInput.blur();
             currentMode = 'normal';
             selectionStart = null;
-        
-        // Enterキー：枠線を作成し、ノーマルモードに戻る
         } else if (e.key === 'Enter') {
             const rect = getSelectionRect();
             if (rect) {
                 boxes.push({ id: `box${nextId++}`, ...rect });
             }
-            currentMode = 'normal';
-            selectionStart = null;
-            saveToLocalStorage();
-
-        // 色変更キー：色を変更し、ノーマルモードに戻る
+            executeCommand();
         } else if (colorKeys[e.code] || e.code === 'KeyD') {
             const rect = getSelectionRect();
             if (rect) {
@@ -256,11 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
-            currentMode = 'normal';
-            selectionStart = null;
-            saveToLocalStorage();
-        
-        // Delete/Backspaceキー：削除し、ノーマルモードに戻る
+            executeCommand();
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
             const rect = getSelectionRect();
             if (rect) {
@@ -278,11 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return !isArrowIntersecting;
                 });
             }
-            currentMode = 'normal';
-            selectionStart = null;
-            saveToLocalStorage();
-            
-        // 矢印キー：範囲を拡大する（モードは維持）
+            executeCommand();
         } else if (ARROW_DIRECTIONS[e.key]) { 
             switch (e.key) {
                 case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
@@ -327,7 +321,12 @@ document.addEventListener('DOMContentLoaded', () => {
         render();
     }
 
+    // 【★修正箇所★】handleTextInput に入力ブロックの判定を追加
     function handleTextInput(text) {
+        if (blockNextInput) {
+            blockNextInput = false;
+            return;
+        }
         if (currentMode !== 'normal') return; 
         if (text) {
             for (const char of text) {
