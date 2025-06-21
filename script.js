@@ -66,6 +66,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+/** PDF書き出し（印刷プレビュー）を呼び出す関数 */
+function exportToPdf() {
+    console.log("PDF書き出しを開始します...");
+    window.print();
+}
+
     // 【追加】ヘルプモーダルを開閉する関数
     /** ヘルプモーダルを開く関数 */
     function openHelpModal() {
@@ -265,6 +271,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === '/') {
                 e.preventDefault();
                 openHelpModal();
+            }
+
+// --- ショートカットキーその4：PDF書き出し ---
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+                e.preventDefault();
+                exportToPdf();
             }
         }
     });
