@@ -220,11 +220,31 @@ document.addEventListener('DOMContentLoaded', () => {
 // script.js の handleVisualModeKeys 関数を、以下の内容に丸ごと置き換えてください
 
 function handleVisualModeKeys(e) {
+    // 【★最終修正点★】Escキーの処理を、より堅牢なものに書き換えます
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation(); // 他のイベントへの伝播を完全に停止
+
+        hiddenInput.blur(); // フォーカスを外し、IMEの未確定文字などをリセット
+
+        // 状態を確実にノーマルモードに戻す
+        currentMode = 'normal';
+        selectionStart = null;
+        isComposing = false;
+        compositionText = '';
+
+        render(); // 再描画（この中で再度フォーカスが設定されます）
+        
+        // 念のため、イベントループの最後に再度フォーカスを試みる
+        setTimeout(() => hiddenInput.focus(), 0);
+        return;
+    }
+
+    // --- 以下は既存の正常なロジック ---
     e.preventDefault();
 
     const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
 
-    // 色変更キーが押された場合
     if (colorKeys[e.code] || e.code === 'KeyD') {
         const rect = getSelectionRect();
         if (rect) {
@@ -241,10 +261,9 @@ function handleVisualModeKeys(e) {
                 }
             }
         }
-        selectionStart = { ...cursorPosition }; // モードを維持し、次の選択を開始
+        currentMode = 'normal';
+        selectionStart = null;
         saveToLocalStorage();
-    
-    // 矢印キーが押された場合
     } else if (ARROW_DIRECTIONS[e.key]) { 
         switch (e.key) {
             case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
@@ -252,23 +271,14 @@ function handleVisualModeKeys(e) {
             case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
             case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
         }
-
-    // Enterキーが押された場合
     } else if (e.key === 'Enter') {
         const rect = getSelectionRect();
         if (rect) {
             boxes.push({ id: `box${nextId++}`, ...rect });
         }
-        selectionStart = { ...cursorPosition }; // モードを維持し、次の選択を開始
-        saveToLocalStorage();
-
-    // Escapeキーが押された場合
-    } else if (e.key === 'Escape') {
-        hiddenInput.blur();
-        currentMode = 'normal'; // ここで初めてノーマルモードに戻る
+        currentMode = 'normal';
         selectionStart = null;
-
-    // Delete/Backspaceキーが押された場合
+        saveToLocalStorage();
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
         const rect = getSelectionRect();
         if (rect) {
@@ -286,7 +296,8 @@ function handleVisualModeKeys(e) {
                 return !isArrowIntersecting;
             });
         }
-        selectionStart = { ...cursorPosition }; // モードを維持し、次の選択を開始
+        currentMode = 'normal';
+        selectionStart = null;
         saveToLocalStorage();
     }
     
