@@ -192,6 +192,45 @@ body {
 
 .help-grid dd {
     margin-left: 150px;
+
+/* style.css の末尾に追加 */
+
+/* --- 印刷/PDF書き出し用のスタイル --- */
+@media print {
+    /* ページの余白やヘッダー/フッターをリセット */
+    @page {
+        size: A4; /* 用紙サイズを指定 */
+        margin: 20mm; /* 余白を指定 */
+    }
+
+    body {
+        padding: 0;
+        background-color: #fff; /* 背景を白に */
+    }
+
+    /* 印刷に不要な要素を非表示にする */
+    .cursor,
+    .selection-highlight,
+    #help-modal {
+        display: none !important;
+    }
+
+    /* キャンバスの影を消す */
+    #canvas-container {
+        box-shadow: none;
+        border-radius: 0;
+        /* ページの区切りで中途半端に切れないようにする */
+        break-inside: avoid;
+    }
+    
+    /* 矢印の色をくっきりさせる */
+    .arrow-line {
+        stroke: #000;
+    }
+    path[fill="#333"] {
+        fill: #000;
+    }
+}
     color: #555;
     padding-bottom: 8px;
 }
