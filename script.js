@@ -230,9 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // --- 初期化 ---
-    if (!loadFromLocalStorage()) {
-        render();
-    }
-    container.focus();
+    // --- 初期化 --
+loadFromLocalStorage(); // 1. まずデータの読み込みを試行する
+render();               // 2. その後、必ず画面を描画する
+container.focus();
 });
