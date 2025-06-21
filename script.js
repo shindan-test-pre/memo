@@ -264,6 +264,7 @@ function handleVisualModeKeys(e) {
 
     // Escapeキーが押された場合
     } else if (e.key === 'Escape') {
+        hiddenInput.blur();
         currentMode = 'normal'; // ここで初めてノーマルモードに戻る
         selectionStart = null;
 
