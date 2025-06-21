@@ -222,23 +222,25 @@ function exportToPdf() {
         }
     }
 
-    // handleVisualModeKeys 関数を丸ごと置き換え
+    // script.js の handleVisualModeKeys 関数を、以下の内容に丸ごと置き換えてください
+
 function handleVisualModeKeys(e) {
     e.preventDefault();
-    // 色変更キーの定義
-    const colorKeys = { 'r': 'red', 'g': 'green', 'b': 'blue' };
 
-    if (colorKeys[e.key] || e.key === 'd') {
+    // 【修正点1】キー判定を e.key から e.code に変更し、IMEの影響を回避
+    const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
+
+    if (colorKeys[e.code] || e.code === 'KeyD') { // e.key -> e.code
         const rect = getSelectionRect();
         if (rect) {
             for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
-                for (let x = rect.x; x < rect.x + rect.width; x += GRID_size) {
+                for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
                     const key = positionToKey(x, y);
-                    if (paperData[key]) { // 文字があるマスのみ
-                        if (e.key === 'd') {
-                            delete colorData[key]; // Dキーで色情報を削除
+                    if (paperData[key]) {
+                        if (e.code === 'KeyD') { // e.key -> e.code
+                            delete colorData[key];
                         } else {
-                            colorData[key] = colorKeys[e.key]; // R,G,Bキーで色を設定
+                            colorData[key] = colorKeys[e.code]; // e.key -> e.code
                         }
                     }
                 }
@@ -247,9 +249,52 @@ function handleVisualModeKeys(e) {
         currentMode = 'normal';
         selectionStart = null;
         saveToLocalStorage();
-        render();
-        return; // 処理を終了
+
+    // 【修正点2】ここから下の、従来の処理が抜けていたのを修正
+    } else if (ARROW_DIRECTIONS[e.key]) { 
+        switch (e.key) {
+            case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
+            case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
+            case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
+            case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
+        }
+    } else if (e.key === 'Enter') {
+        const rect = getSelectionRect();
+        if (rect) {
+            boxes.push({ id: `box${nextId++}`, ...rect });
+        }
+        currentMode = 'normal';
+        selectionStart = null;
+        saveToLocalStorage();
+    } else if (e.key === 'Escape') {
+        currentMode = 'normal';
+        selectionStart = null;
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        const rect = getSelectionRect();
+        if (rect) {
+            // 包含判定に修正した、より良い削除ロジック
+            boxes = boxes.filter(box => 
+                !(box.x >= rect.x && 
+                  box.y >= rect.y &&
+                  (box.x + box.width) <= (rect.x + rect.width) &&
+                  (box.y + box.height) <= (rect.y + rect.height))
+            );
+            arrows = arrows.filter(arrow => {
+                const isArrowIntersecting = arrow.path.some(p => 
+                    p.x >= rect.x && p.x < rect.x + rect.width && 
+                    p.y >= rect.y && p.y < rect.y + rect.height
+                );
+                return !isArrowIntersecting;
+            });
+        }
+        currentMode = 'normal';
+        selectionStart = null;
+        saveToLocalStorage();
     }
+
+    // 最後に一度だけ描画する
+    render();
+}
 
     // ↓↓↓ 以下は既存の処理 ↓↓↓
     if (ARROW_DIRECTIONS[e.key]) { 
