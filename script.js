@@ -217,72 +217,80 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 【★修正箇所★】handleVisualModeKeys 関数を完全に修正
-    function handleVisualModeKeys(e) {
-        e.preventDefault();
-    
-        const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
-    
-        if (colorKeys[e.code] || e.code === 'KeyD') {
-            const rect = getSelectionRect();
-            if (rect) {
-                for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
-                    for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
-                        const key = positionToKey(x, y);
-                        if (paperData[key]) {
-                            if (e.code === 'KeyD') {
-                                delete colorData[key];
-                            } else {
-                                colorData[key] = colorKeys[e.code];
-                            }
+// script.js の handleVisualModeKeys 関数を、以下の内容に丸ごと置き換えてください
+
+function handleVisualModeKeys(e) {
+    e.preventDefault();
+
+    const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
+
+    // 色変更キーが押された場合
+    if (colorKeys[e.code] || e.code === 'KeyD') {
+        const rect = getSelectionRect();
+        if (rect) {
+            for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
+                for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
+                    const key = positionToKey(x, y);
+                    if (paperData[key]) {
+                        if (e.code === 'KeyD') {
+                            delete colorData[key];
+                        } else {
+                            colorData[key] = colorKeys[e.code];
                         }
                     }
                 }
             }
-            currentMode = 'normal';
-            selectionStart = null;
-            saveToLocalStorage();
-        } else if (ARROW_DIRECTIONS[e.key]) { 
-            switch (e.key) {
-                case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
-                case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
-                case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
-                case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-            }
-        } else if (e.key === 'Enter') {
-            const rect = getSelectionRect();
-            if (rect) {
-                boxes.push({ id: `box${nextId++}`, ...rect });
-            }
-            currentMode = 'normal';
-            selectionStart = null;
-            saveToLocalStorage();
-        } else if (e.key === 'Escape') {
-            currentMode = 'normal';
-            selectionStart = null;
-        } else if (e.key === 'Delete' || e.key === 'Backspace') {
-            const rect = getSelectionRect();
-            if (rect) {
-                boxes = boxes.filter(box => 
-                    !(box.x >= rect.x && 
-                      box.y >= rect.y &&
-                      (box.x + box.width) <= (rect.x + rect.width) &&
-                      (box.y + box.height) <= (rect.y + rect.height))
-                );
-                arrows = arrows.filter(arrow => {
-                    const isArrowIntersecting = arrow.path.some(p => 
-                        p.x >= rect.x && p.x < rect.x + rect.width && 
-                        p.y >= rect.y && p.y < rect.y + rect.height
-                    );
-                    return !isArrowIntersecting;
-                });
-            }
-            currentMode = 'normal';
-            selectionStart = null;
-            saveToLocalStorage();
         }
-        render();
+        selectionStart = { ...cursorPosition }; // モードを維持し、次の選択を開始
+        saveToLocalStorage();
+    
+    // 矢印キーが押された場合
+    } else if (ARROW_DIRECTIONS[e.key]) { 
+        switch (e.key) {
+            case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
+            case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
+            case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
+            case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
+        }
+
+    // Enterキーが押された場合
+    } else if (e.key === 'Enter') {
+        const rect = getSelectionRect();
+        if (rect) {
+            boxes.push({ id: `box${nextId++}`, ...rect });
+        }
+        selectionStart = { ...cursorPosition }; // モードを維持し、次の選択を開始
+        saveToLocalStorage();
+
+    // Escapeキーが押された場合
+    } else if (e.key === 'Escape') {
+        currentMode = 'normal'; // ここで初めてノーマルモードに戻る
+        selectionStart = null;
+
+    // Delete/Backspaceキーが押された場合
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        const rect = getSelectionRect();
+        if (rect) {
+            boxes = boxes.filter(box => 
+                !(box.x >= rect.x && 
+                  box.y >= rect.y &&
+                  (box.x + box.width) <= (rect.x + rect.width) &&
+                  (box.y + box.height) <= (rect.y + rect.height))
+            );
+            arrows = arrows.filter(arrow => {
+                const isArrowIntersecting = arrow.path.some(p => 
+                    p.x >= rect.x && p.x < rect.x + rect.width && 
+                    p.y >= rect.y && p.y < rect.y + rect.height
+                );
+                return !isArrowIntersecting;
+            });
+        }
+        selectionStart = { ...cursorPosition }; // モードを維持し、次の選択を開始
+        saveToLocalStorage();
     }
+    
+    render();
+}
     
     function handleArrowModeKeys(e) {
         e.preventDefault();
