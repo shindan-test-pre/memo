@@ -2,6 +2,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM要素の取得
     const container = document.getElementById('canvas-container');
     const svgLayer = document.getElementById('arrow-svg-layer');
+    // 【追加】ヘルプモーダル用のDOM要素
+    const helpModal = document.getElementById('help-modal');
+    const closeHelpModalBtn = document.getElementById('close-help-modal');
     
     // 隠し入力要素の作成
     const hiddenInput = document.createElement('input');
@@ -20,12 +23,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // 状態管理
     let paperData = {};
     let boxes = [];
-    let arrows = []; // 軌跡(path)を保存する配列形式
+    let arrows = [];
     let nextId = 0;
     let cursorPosition = { x: 0, y: 0 };
     let currentMode = 'normal';
     let selectionStart = null;
-    let currentArrowPath = []; // 矢印モード中の軌跡を管理
+    let currentArrowPath = [];
     let isComposing = false;
     let compositionText = '';
 
@@ -47,26 +50,36 @@ document.addEventListener('DOMContentLoaded', () => {
     /** メモ全体をリセットする関数 */
     function resetMemo() {
         if (confirm('すべてのメモ内容が消去され、元に戻せません。\n本当によろしいですか？')) {
-            // 1. 全てのデータオブジェクトを初期状態に戻す
             paperData = {};
             boxes = [];
             arrows = [];
             nextId = 0;
             cursorPosition = { x: 0, y: 0 };
-            currentMode = 'normal'; // モードもノーマルに戻す
+            currentMode = 'normal';
             selectionStart = null;
             currentArrowPath = [];
-
-            // 2. ブラウザのストレージからもデータを削除する
             localStorage.removeItem(LOCAL_STORAGE_KEY);
-            
-            // 3. 画面を再描画して、白紙の状態を表示する
             render();
-            
             console.log("メモがリセットされました。");
         } else {
             console.log("リセットがキャンセルされました。");
         }
+    }
+
+    // 【追加】ヘルプモーダルを開閉する関数
+    /** ヘルプモーダルを開く関数 */
+    function openHelpModal() {
+        currentMode = 'modal'; // モードをモーダルに変更
+        helpModal.classList.add('is-visible');
+        helpModal.setAttribute('aria-hidden', 'false');
+    }
+
+    /** ヘルプモーダルを閉じる関数 */
+    function closeHelpModal() {
+        currentMode = 'normal'; // モードをノーマルに戻す
+        helpModal.classList.remove('is-visible');
+        helpModal.setAttribute('aria-hidden', 'true');
+        container.focus(); // モーダルを閉じたらキャンバスにフォーカスを戻す
     }
     
     /** メイン描画関数 */
@@ -114,43 +127,31 @@ document.addEventListener('DOMContentLoaded', () => {
     function deserializeState(jsonString) { try { const state = JSON.parse(jsonString); if (state && typeof state.paperData === 'object' && Array.isArray(state.boxes) && Array.isArray(state.arrows)) { paperData = state.paperData; boxes = state.boxes; arrows = state.arrows; nextId = state.nextId || 0; return true; } else { alert('無効なファイル形式です。'); return false; } } catch (error) { alert('ファイルの読み込みに失敗しました。'); console.error("Failed to parse state:", error); return false; } }
     function saveToLocalStorage() { try { localStorage.setItem(LOCAL_STORAGE_KEY, serializeState()); } catch (error) { console.error("Failed to save to localStorage:", error); } }
     function loadFromLocalStorage() { const stateJson = localStorage.getItem(LOCAL_STORAGE_KEY); if (stateJson) { return deserializeState(stateJson); } return false; }
-    // script.js の中の exportToFile 関数を以下に差し替える
-
+    
     function exportToFile() {
-        // 1. 分かりやすい形式で、デフォルトのファイル名を生成する
         const now = new Date();
         const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0'); // 月は0から始まるため+1
+        const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
         const defaultFileName = `memo-${year}-${month}-${day}.json`;
-
-        // 2. ファイル名を入力するためのプロンプトを表示する
         const fileNameInput = prompt("ファイル名を入力して保存してください:", defaultFileName);
-
-        // 3. ユーザーがキャンセルボタンを押した場合は、処理を中断する
         if (fileNameInput === null) {
             console.log("保存がキャンセルされました。");
             return;
         }
-        
-        // 4. 入力されたファイル名を整形する
         let finalFileName = fileNameInput.trim();
-        // 入力が空の場合はデフォルト名を使用
         if (finalFileName === "") {
             finalFileName = defaultFileName;
         }
-        // 末尾に .json がなければ追加する
         if (!finalFileName.toLowerCase().endsWith('.json')) {
             finalFileName += '.json';
         }
-
-        // 5. ファイルを生成してダウンロードを実行する（既存のロジック）
         const stateJson = serializeState();
         const blob = new Blob([stateJson], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = finalFileName; // ここでユーザーが指定したファイル名を使用
+        a.download = finalFileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -160,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- キーボードイベントハンドラ ---
     function handleNormalModeKeys(e) {
-        if ((e.key === 's' || e.key === 'o') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (e.key === 's') exportToFile(); if (e.key === 'o') importFromFile(); return; }
+        // Ctrl+S/Oはグローバルハンドラに移動したため、ここでの処理は不要
         if ((e.key === 'e' || e.key === 'l') && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; } 
@@ -239,45 +240,72 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleTextInput(text) { if (text) { for (const char of text) { insertChar(char); } render(); saveToLocalStorage(); } }
 
+    // 【修正】グローバルなキー操作と、hiddenInputへの入力を分ける
+    
+    // アプリケーションがフォーカスされていない状態でも捕捉したいショートカットキー
+    window.addEventListener('keydown', (e) => {
+        // モーダル表示中はEscキー以外はほぼ無効化
+        if (currentMode === 'modal') {
+            if (e.key === 'Escape') {
+                closeHelpModal();
+            }
+            return; // 他のキー操作は受け付けない
+        }
+
+        // --- グローバルショートカット ---
+        if ((e.ctrlKey || e.metaKey)) {
+            if (e.key === 's' || e.key === 'o') {
+                e.preventDefault();
+                hiddenInput.focus(); // 実際の処理はhiddenInputのハンドラに任せる
+            }
+            if (e.shiftKey && e.key === 'Backspace') {
+                e.preventDefault();
+                resetMemo();
+            }
+            if (e.key === '/') {
+                e.preventDefault();
+                openHelpModal();
+            }
+        }
+    });
+
     container.addEventListener('click', (event) => { const rect = container.getBoundingClientRect(); const x = event.clientX - rect.left + container.scrollLeft; const y = event.clientY - rect.top + container.scrollTop; cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE; cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE; if (currentMode === 'visual' || currentMode === 'arrow') { currentMode = 'normal'; selectionStart = null; currentArrowPath = []; } render(); });
-    hiddenInput.addEventListener('keydown', (e) => { if (isComposing) return; switch (currentMode) { case 'normal': handleNormalModeKeys(e); break; case 'visual': handleVisualModeKeys(e); break; case 'arrow': handleArrowModeKeys(e); break; } });
+    
+    // hiddenInputがフォーカスされている時のキー操作
+    hiddenInput.addEventListener('keydown', (e) => {
+        if (isComposing || currentMode === 'modal') return;
+
+        // 保存・読み込みのショートカットをこちらでも処理
+        if ((e.key === 's' || e.key === 'o') && (e.ctrlKey || e.metaKey)) {
+             e.preventDefault();
+             if (e.key === 's') exportToFile();
+             if (e.key === 'o') importFromFile();
+             return;
+        }
+
+        switch (currentMode) {
+            case 'normal': handleNormalModeKeys(e); break;
+            case 'visual': handleVisualModeKeys(e); break;
+            case 'arrow': handleArrowModeKeys(e); break;
+        }
+    });
+
     hiddenInput.addEventListener('compositionstart', () => { isComposing = true; compositionText = ''; });
     hiddenInput.addEventListener('compositionupdate', (e) => { compositionText = e.data || ''; render(); });
     hiddenInput.addEventListener('compositionend', (e) => { isComposing = false; compositionText = ''; handleTextInput(e.data || ''); e.target.value = ''; });
     hiddenInput.addEventListener('input', (e) => { if (isComposing) return; handleTextInput(e.target.value); e.target.value = ''; });
 
-    // アプリのフォーカス状態に関わらず、ショートカットキーを捕捉する
-window.addEventListener('keydown', (e) => {
+    // 【追加】ヘルプモーダル用のクリックイベントリスナー
+    closeHelpModalBtn.addEventListener('click', closeHelpModal);
+    helpModal.addEventListener('click', (e) => {
+        if (e.target === helpModal) {
+            closeHelpModal();
+        }
+    });
 
-    // --- ショートカットキーその1：保存・読み込み ---
-    if ((e.key === 's' || e.key === 'o') && (e.ctrlKey || e.metaKey)) {
-        // 1. ブラウザのデフォルトの動作を停止させる
-        e.preventDefault();
-        // 2. アプリの入力欄にフォーカスを移動させる
-        hiddenInput.focus();
-    }
-
-    // --- ショートカットキーその2：リセット (↑のif文とは別に、並べて書く) ---
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Backspace') {
-        // デフォルト動作をキャンセル
-        e.preventDefault();
-        
-        // リセット関数を呼び出す
-        resetMemo();
-        
-        // リセット処理をしたら他のキー処理は不要なのでここで終了
-        return; 
-    }
-
-    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
-    e.preventDefault(); // ブラウザのショートカット機能をキャンセル
-    openHelpModal();
-    }
-});
-    
-    // --- 初期化 --
-loadFromLocalStorage(); // 1. まずデータの読み込みを試行する
-render();               // 2. その後、必ず画面を描画する
-container.focus();
-window.scrollTo(0, 0);
+    // --- 初期化 ---
+    loadFromLocalStorage();
+    render();
+    container.focus();
+    window.scrollTo(0, 0);
 });
