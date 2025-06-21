@@ -89,7 +89,48 @@ document.addEventListener('DOMContentLoaded', () => {
     function deserializeState(jsonString) { try { const state = JSON.parse(jsonString); if (state && typeof state.paperData === 'object' && Array.isArray(state.boxes) && Array.isArray(state.arrows)) { paperData = state.paperData; boxes = state.boxes; arrows = state.arrows; nextId = state.nextId || 0; return true; } else { alert('無効なファイル形式です。'); return false; } } catch (error) { alert('ファイルの読み込みに失敗しました。'); console.error("Failed to parse state:", error); return false; } }
     function saveToLocalStorage() { try { localStorage.setItem(LOCAL_STORAGE_KEY, serializeState()); } catch (error) { console.error("Failed to save to localStorage:", error); } }
     function loadFromLocalStorage() { const stateJson = localStorage.getItem(LOCAL_STORAGE_KEY); if (stateJson) { return deserializeState(stateJson); } return false; }
-    function exportToFile() { const stateJson = serializeState(); const blob = new Blob([stateJson], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `memo-${Date.now()}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
+    // script.js の中の exportToFile 関数を以下に差し替える
+
+    function exportToFile() {
+        // 1. 分かりやすい形式で、デフォルトのファイル名を生成する
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0'); // 月は0から始まるため+1
+        const day = String(now.getDate()).padStart(2, '0');
+        const defaultFileName = `memo-${year}-${month}-${day}.json`;
+
+        // 2. ファイル名を入力するためのプロンプトを表示する
+        const fileNameInput = prompt("ファイル名を入力して保存してください:", defaultFileName);
+
+        // 3. ユーザーがキャンセルボタンを押した場合は、処理を中断する
+        if (fileNameInput === null) {
+            console.log("保存がキャンセルされました。");
+            return;
+        }
+        
+        // 4. 入力されたファイル名を整形する
+        let finalFileName = fileNameInput.trim();
+        // 入力が空の場合はデフォルト名を使用
+        if (finalFileName === "") {
+            finalFileName = defaultFileName;
+        }
+        // 末尾に .json がなければ追加する
+        if (!finalFileName.toLowerCase().endsWith('.json')) {
+            finalFileName += '.json';
+        }
+
+        // 5. ファイルを生成してダウンロードを実行する（既存のロジック）
+        const stateJson = serializeState();
+        const blob = new Blob([stateJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = finalFileName; // ここでユーザーが指定したファイル名を使用
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
     function importFromFile() { const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json'; input.onchange = (event) => { const file = event.target.files[0]; if (!file) return; if (!confirm('現在の内容は上書きされます。よろしいですか？')) return; const reader = new FileReader(); reader.onload = (e) => { if (deserializeState(e.target.result)) { render(); } }; reader.readAsText(file); }; input.click(); }
 
     // --- キーボードイベントハンドラ ---
