@@ -268,6 +268,11 @@ window.addEventListener('keydown', (e) => {
         // リセット処理をしたら他のキー処理は不要なのでここで終了
         return; 
     }
+
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+    e.preventDefault(); // ブラウザのショートカット機能をキャンセル
+    openHelpModal();
+    }
 });
     
     // --- 初期化 --
