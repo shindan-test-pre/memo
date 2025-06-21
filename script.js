@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 状態管理
     let paperData = {};
+    let colorData = {};
     let boxes = [];
     let arrows = [];
     let nextId = 0;
@@ -51,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetMemo() {
         if (confirm('すべてのメモ内容が消去され、元に戻せません。\n本当によろしいですか？')) {
             paperData = {};
+            colorData = {};
             boxes = [];
             arrows = [];
             nextId = 0;
@@ -129,8 +131,14 @@ function exportToPdf() {
     }
     
     // --- データ保存・読み込み関連 ---
-    function serializeState() { return JSON.stringify({ paperData, boxes, arrows, nextId }); }
-    function deserializeState(jsonString) { try { const state = JSON.parse(jsonString); if (state && typeof state.paperData === 'object' && Array.isArray(state.boxes) && Array.isArray(state.arrows)) { paperData = state.paperData; boxes = state.boxes; arrows = state.arrows; nextId = state.nextId || 0; return true; } else { alert('無効なファイル形式です。'); return false; } } catch (error) { alert('ファイルの読み込みに失敗しました。'); console.error("Failed to parse state:", error); return false; } }
+    function serializeState() { return JSON.stringify({ paperData, colorData, boxes, arrows, nextId }); }
+    function deserializeState(jsonString) { 
+        try { 
+            const state = JSON.parse(jsonString);
+            if (state && typeof state.paperData === 'object' && Array.isArray(state.boxes) && Array.isArray(state.arrows)) {
+                paperData = state.paperData; 
+                colorData = state.colorData || {};
+                boxes = state.boxes; arrows = state.arrows; nextId = state.nextId || 0; return true; } else { alert('無効なファイル形式です。'); return false; } } catch (error) { alert('ファイルの読み込みに失敗しました。'); console.error("Failed to parse state:", error); return false; } }
     function saveToLocalStorage() { try { localStorage.setItem(LOCAL_STORAGE_KEY, serializeState()); } catch (error) { console.error("Failed to save to localStorage:", error); } }
     function loadFromLocalStorage() { const stateJson = localStorage.getItem(LOCAL_STORAGE_KEY); if (stateJson) { return deserializeState(stateJson); } return false; }
     
