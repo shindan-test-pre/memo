@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const helpModal = document.getElementById('help-modal');
     const closeHelpModalBtn = document.getElementById('close-help-modal');
     
+    // 隠し入力要素の作成
     const hiddenInput = document.createElement('input');
     hiddenInput.type = 'text';
     hiddenInput.classList.add('hidden-input');
@@ -39,7 +40,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function parsePosition(key) { try { const [x, y] = key.split(',').map(Number); if (isNaN(x) || isNaN(y)) return null; return { x, y }; } catch (error) { return null; } }
     function positionToKey(x, y) { return `${x},${y}`; }
     function moveCursor(dx, dy) { cursorPosition.x = Math.max(0, cursorPosition.x + dx); cursorPosition.y = Math.max(0, cursorPosition.y + dy); }
-    function createArrowMarker() { const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker'); marker.id = 'arrowhead'; marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5'); marker.setAttribute('markerWidth', '5'); marker.setAttribute('markerHeight', '5'); marker.setAttribute('orient', 'auto-start-reverse'); const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); pathEl.setAttribute('fill', '#333'); marker.appendChild(pathEl); defs.appendChild(marker); return defs; }
     
     function createCharCell(charObject, x, y, isComposingChar = false) {
         const charCell = document.createElement('div');
@@ -56,7 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function getSelectionRect() { if (!selectionStart) return null; const x1 = Math.min(selectionStart.x, cursorPosition.x); const y1 = Math.min(selectionStart.y, cursorPosition.y); const x2 = Math.max(selectionStart.x, cursorPosition.x); const y2 = Math.max(selectionStart.y, cursorPosition.y); return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE }; }
     
-    // 【★修正★】データ操作関数は、履歴記録や描画を行わないようにする
     function insertChar(char) {
         const currentKey = positionToKey(cursorPosition.x, cursorPosition.y);
         const currentY = cursorPosition.y;
@@ -64,23 +63,31 @@ document.addEventListener('DOMContentLoaded', () => {
         charsToShift.forEach(item => { const oldKey = positionToKey(item.x, item.y); const newKey = positionToKey(item.x + GRID_SIZE, item.y); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; });
         paperData[currentKey] = { char: char, color: null, bold: false, underline: false };
         moveCursor(GRID_SIZE, 0);
-    }
-    function deleteCharBackward() { if (cursorPosition.x === 0 && cursorPosition.y === 0) return false; if (cursorPosition.x > 0) { moveCursor(-GRID_SIZE, 0); return deleteCharForward(); } return false; }
-    function deleteCharForward() { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); if (!paperData[currentKey]) return false; const currentY = cursorPosition.y; delete paperData[currentKey]; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x > cursorPosition.x).sort((a, b) => a.x - b.x); charsToShift.forEach(item => { const oldKey = positionToKey(item.x, item.y); const newKey = positionToKey(item.x - GRID_SIZE, item.y); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; }); return true; }
-    
-    function insertNewLine() {
-        const shiftThresholdY = cursorPosition.y + GRID_SIZE;
-        const charsToShift = Object.keys(paperData).map(parsePosition).filter(p => p && p.y >= shiftThresholdY).sort((a, b) => b.y - a.y || b.x - a.x);
-        for (const pos of charsToShift) { const oldKey = positionToKey(pos.x, pos.y); const newKey = positionToKey(pos.x, pos.y + GRID_SIZE); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; }
-        boxes.forEach(box => { if (box.y >= shiftThresholdY) { box.y += GRID_SIZE; } });
-        arrows.forEach(arrow => { arrow.path.forEach(point => { if (point.y >= shiftThresholdY) { point.y += GRID_SIZE; } }); });
-        cursorPosition.x = 0;
-        cursorPosition.y = shiftThresholdY;
+        return true;
     }
 
+    function deleteCharForward() {
+        const currentKey = positionToKey(cursorPosition.x, cursorPosition.y);
+        if (!paperData[currentKey]) return false;
+        const currentY = cursorPosition.y;
+        delete paperData[currentKey];
+        const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x > cursorPosition.x).sort((a, b) => a.x - b.x);
+        charsToShift.forEach(item => { const oldKey = positionToKey(item.x, item.y); const newKey = positionToKey(item.x - GRID_SIZE, item.y); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; });
+        return true;
+    }
+
+    function deleteCharBackward() {
+        if (cursorPosition.x === 0 && cursorPosition.y === 0) return false;
+        if (cursorPosition.x > 0) {
+            moveCursor(-GRID_SIZE, 0);
+            return deleteCharForward();
+        }
+        return false;
+    }
+    
     function updateCanvasSize() { const buffer = 300; let maxX = 0; let maxY = 0; const allPositions = [ ...Object.keys(paperData).map(parsePosition), ...boxes.flatMap(b => [{x: b.x + b.width, y: b.y + b.height}]), ...arrows.flatMap(a => a.path) ].filter(p => p); allPositions.forEach(p => { if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }); const newWidth = maxX + buffer; const newHeight = maxY + buffer; const minWidth = container.parentNode.clientWidth; const minHeight = container.parentNode.clientHeight; container.style.width = `${Math.max(minWidth, newWidth)}px`; container.style.height = `${Math.max(minHeight, newHeight)}px`; svgLayer.setAttribute('width', container.scrollWidth); svgLayer.setAttribute('height', container.scrollHeight); }
 
-    // --- Undo/Redo & State Management ---
+    // --- アプリケーション状態管理 ---
     function recordHistory() {
         const currentState = { paperData: JSON.parse(JSON.stringify(paperData)), boxes: JSON.parse(JSON.stringify(boxes)), arrows: JSON.parse(JSON.stringify(arrows)), nextId };
         if (historyIndex < history.length - 1) { history = history.slice(0, historyIndex + 1); }
@@ -101,11 +108,19 @@ document.addEventListener('DOMContentLoaded', () => {
     function undo() { if (historyIndex > 0) { historyIndex--; loadStateFromHistory(historyIndex); saveToLocalStorage(); } }
     function redo() { if (historyIndex < history.length - 1) { historyIndex++; loadStateFromHistory(historyIndex); saveToLocalStorage(); } }
     function resetMemo() { if (confirm('すべてのメモ内容が消去され、元に戻せません。\n本当によろしいですか？')) { paperData = {}; boxes = []; arrows = []; nextId = 0; cursorPosition = { x: 0, y: 0 }; currentMode = 'normal'; selectionStart = null; currentArrowPath = []; recordHistory(); render(); } }
-    function exportToPdf() { window.print(); }
     function openHelpModal() { currentMode = 'modal'; helpModal.classList.add('is-visible'); helpModal.setAttribute('aria-hidden', 'false'); }
-    function closeHelpModal() { currentMode = 'normal'; helpModal.classList.remove('is-visible'); helpModal.setAttribute('aria-hidden', 'true'); hiddenInput.focus(); }
+    function closeHelpModal() { currentMode = 'normal'; helpModal.classList.remove('is-visible'); helpModal.setAttribute('aria-hidden', 'true'); hiddenInput.focus({preventScroll:true}); }
     
-    /** メイン描画関数 */
+    // --- ファイル入出力 ---
+    function serializeState() { return JSON.stringify({ history, historyIndex }); }
+    function deserializeState(jsonString) { try { const state = JSON.parse(jsonString); if (state && Array.isArray(state.history) && typeof state.historyIndex === 'number') { history = state.history; historyIndex = state.historyIndex; loadStateFromHistory(historyIndex); return true; } } catch (error) { console.error("Failed to parse state:", error); } return false; }
+    function saveToLocalStorage() { try { localStorage.setItem(LOCAL_STORAGE_KEY, serializeState()); } catch (error) { console.error("Failed to save to localStorage:", error); } }
+    function loadFromLocalStorage() { if (localStorage.getItem(LOCAL_STORAGE_KEY)) { return deserializeState(localStorage.getItem(LOCAL_STORAGE_KEY)); } return false; }
+    function exportToFile() { const stateJson = serializeState(); const blob = new Blob([stateJson], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `memo-${Date.now()}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
+    function importFromFile() { const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json'; input.onchange = (event) => { const file = event.target.files[0]; if (!file) return; if (!confirm('現在の内容は上書きされます。よろしいですか？')) return; const reader = new FileReader(); reader.onload = (e) => { const success = deserializeState(e.target.result); if (!success) { alert("ファイルの読み込みに失敗しました。"); history = []; historyIndex = -1; recordHistory(); render(); } }; reader.readAsText(file); }; input.click(); }
+    function exportToPdf() { window.print(); }
+    
+    // --- メイン描画関数 ---
     function render() {
         const elementsToRemove = container.querySelectorAll('.char-cell, .cursor, .selection-highlight, .border-box');
         elementsToRemove.forEach(el => el.remove());
@@ -128,63 +143,86 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCanvasSize();
     }
     
-    // --- データ保存・読み込み関連 ---
-    function serializeState() { return JSON.stringify({ history, historyIndex }); }
-    function deserializeState(jsonString) { try { const state = JSON.parse(jsonString); if (state && Array.isArray(state.history) && typeof state.historyIndex === 'number') { history = state.history; historyIndex = state.historyIndex; loadStateFromHistory(historyIndex); return true; } } catch (error) { console.error("Failed to parse state:", error); } return false; }
-    function saveToLocalStorage() { try { localStorage.setItem(LOCAL_STORAGE_KEY, serializeState()); } catch (error) { console.error("Failed to save to localStorage:", error); } }
-    function loadFromLocalStorage() { if (localStorage.getItem(LOCAL_STORAGE_KEY)) { return deserializeState(localStorage.getItem(LOCAL_STORAGE_KEY)); } return false; }
-    function exportToFile() { const stateJson = serializeState(); const blob = new Blob([stateJson], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `memo-${Date.now()}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
-    function importFromFile() { const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json'; input.onchange = (event) => { const file = event.target.files[0]; if (!file) return; if (!confirm('現在の内容は上書きされます。よろしいですか？')) return; const reader = new FileReader(); reader.onload = (e) => { const success = deserializeState(e.target.result); if (!success) { alert("ファイルの読み込みに失敗しました。"); history = []; historyIndex = -1; recordHistory(); render(); } }; reader.readAsText(file); }; input.click(); }
-
     // --- キーボードイベントハンドラ ---
-    // 【★修正★】処理の流れを再構築し、クリーンな形に
     function handleNormalModeKeys(e) {
+        let stateChanged = false;
         if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'l')) {
             e.preventDefault();
             if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; } 
             else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; }
-            render();
-            return;
+        } else {
+            const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
+            if (controlKeys.includes(e.key)) {
+                e.preventDefault();
+                switch (e.key) {
+                    case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
+                    case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
+                    case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
+                    case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
+                    // 【★修正★】Enterキーの動作を、単なるカーソル移動に戻す
+                    case 'Enter':
+                        cursorPosition.y += GRID_SIZE;
+                        cursorPosition.x = 0;
+                        break;
+                    case 'Backspace': stateChanged = deleteCharBackward(); break;
+                    case 'Delete': stateChanged = deleteCharForward(); break;
+                }
+            }
         }
+        if (stateChanged) recordHistory();
+        render();
+    }
 
-        const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
-        if (controlKeys.includes(e.key)) {
-            e.preventDefault();
-            let stateChanged = false;
+    function handleVisualModeKeys(e) {
+        e.preventDefault();
+        let stateChanged = false;
+        const applyStyleToSelection = (style, value) => {
+            const rect = getSelectionRect();
+            if (!rect) return;
+            for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
+                for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
+                    const key = positionToKey(x, y);
+                    if (paperData[key]) {
+                        if (style === 'toggle') { paperData[key][value] = !paperData[key][value]; } else { paperData[key][style] = value; }
+                    }
+                }
+            }
+            stateChanged = true;
+        };
+        const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
+        if (e.key === 'Escape') { currentMode = 'normal'; selectionStart = null; } 
+        else if (e.key === 'Enter') {
+            const rect = getSelectionRect();
+            if (rect) { boxes.push({ id: `box${nextId++}`, ...rect }); stateChanged = true; }
+            currentMode = 'normal'; selectionStart = null;
+        } else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyB') { applyStyleToSelection('toggle', 'bold'); }
+        else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyU') { applyStyleToSelection('toggle', 'underline'); }
+        else if (colorKeys[e.code]) { applyStyleToSelection('color', colorKeys[e.code]); }
+        else if (e.code === 'KeyD') { applyStyleToSelection('color', null); }
+        else if (e.key === 'Delete' || e.key === 'Backspace') {
+            const rect = getSelectionRect();
+            if (rect) {
+                boxes = boxes.filter(box => !(box.x >= rect.x && box.y >= rect.y && (box.x + box.width) <= (rect.x + rect.width) && (box.y + box.height) <= (rect.y + rect.height)));
+                arrows = arrows.filter(arrow => !arrow.path.some(p => p.x >= rect.x && p.x < rect.x + rect.width && p.y >= rect.y && p.y < rect.y + rect.height));
+                stateChanged = true;
+            }
+            currentMode = 'normal'; selectionStart = null;
+        } else if (ARROW_DIRECTIONS[e.key]) { 
             switch (e.key) {
                 case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
                 case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
                 case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
                 case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-                case 'Enter':
-                    insertNewLine();
-                    stateChanged = true;
-                    break;
-                case 'Backspace':
-                    stateChanged = deleteCharBackward();
-                    break;
-                case 'Delete':
-                    stateChanged = deleteCharForward();
-                    break;
             }
-
-            if (stateChanged) {
-                recordHistory();
-            }
-            render();
         }
-    }
-
-    function handleVisualModeKeys(e) {
-        e.preventDefault();
-        // ... (以前の、Undo/Redoとスタイル機能を含んだ完成版のコードをここに統合)
+        if (stateChanged) recordHistory();
+        render();
     }
     
     function handleArrowModeKeys(e) {
         e.preventDefault();
         const lastPoint = currentArrowPath[currentArrowPath.length - 1];
         if (!lastPoint) { currentMode = 'normal'; render(); return; }
-        
         if (ARROW_DIRECTIONS[e.key]) {
             let nextPoint = { ...lastPoint };
             switch (e.key) {
@@ -203,7 +241,13 @@ document.addEventListener('DOMContentLoaded', () => {
         render();
     }
 
-    function handleTextInput(text) { if (currentMode !== 'normal') return; if (text) { for (const char of text) { insertChar(char); } } }
+    function handleTextInput(text) {
+        if (currentMode !== 'normal') return;
+        let stateChanged = false;
+        if (text) { for (const char of text) { if(insertChar(char)) stateChanged = true; } }
+        if (stateChanged) recordHistory();
+        render();
+    }
 
     // --- イベントリスナー群 ---
     window.addEventListener('keydown', (e) => {
@@ -211,10 +255,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if ((e.ctrlKey || e.metaKey)) {
             if (e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
             if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
-            if (e.key === 's' || e.key === 'o') { e.preventDefault(); if (e.key === 's') exportToFile(); if (e.key === 'o') importFromFile(); }
-            if (e.shiftKey && e.key === 'Backspace') { e.preventDefault(); resetMemo(); }
-            if (e.key === '/') { e.preventDefault(); openHelpModal(); }
-            if (e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); exportToPdf(); }
+            if (currentMode === 'visual' && (e.code === 'KeyB' || e.code === 'KeyU')) { e.preventDefault(); handleVisualModeKeys(e); return; }
+            if (e.key === 's' || e.key === 'o') { e.preventDefault(); if (e.key === 's') exportToFile(); if (e.key === 'o') importFromFile(); return; }
+            if (e.shiftKey && e.key === 'Backspace') { e.preventDefault(); resetMemo(); return; }
+            if (e.key === '/') { e.preventDefault(); openHelpModal(); return; }
+            if (e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); exportToPdf(); return; }
         }
     });
 
@@ -229,7 +274,17 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentMode === 'arrow') { handleArrowModeKeys(e); }
     });
 
-    container.addEventListener('click', (event) => { const rect = container.getBoundingClientRect(); const x = event.clientX - rect.left + container.scrollLeft; const y = event.clientY - rect.top + container.scrollTop; cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE; cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE; if (currentMode !== 'normal') { currentMode = 'normal'; selectionStart = null; currentArrowPath = []; } render(); });
+    container.addEventListener('click', (event) => { 
+        currentMode = 'normal';
+        selectionStart = null;
+        currentArrowPath = [];
+        const rect = container.getBoundingClientRect(); 
+        const x = event.clientX - rect.left + container.scrollLeft; 
+        const y = event.clientY - rect.top + container.scrollTop; 
+        cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE; 
+        cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE; 
+        render(); 
+    });
     
     closeHelpModalBtn.addEventListener('click', closeHelpModal);
     helpModal.addEventListener('click', (e) => { if (e.target === helpModal) { closeHelpModal(); } });
