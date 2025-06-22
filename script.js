@@ -180,9 +180,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleNormalModeKeys(e) {
         if ((e.key === 'e' || e.key === 'l') && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
+            const scrollX = window.scrollX;
+            const scrollY = window.scrollY;
             if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; } 
             else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; }
             render();
+            window.scrollTo(scrollX, scrollY);
         } else {
             const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
             if (controlKeys.includes(e.key)) {
@@ -202,51 +205,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function handleVisualModeKeys(e) {
-        e.preventDefault();
-        const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
-        const returnToNormal = () => { currentMode = 'normal'; selectionStart = null; saveToLocalStorage(); };
+    // handleVisualModeKeys 関数を丸ごと置き換え
 
-        if (e.key === 'Escape') { returnToNormal();
-        } else if (e.key === 'Enter') {
-            const rect = getSelectionRect();
-            if (rect) { boxes.push({ id: `box${nextId++}`, ...rect }); }
-            returnToNormal();
-        } else if (colorKeys[e.code] || e.code === 'KeyD') {
-            const rect = getSelectionRect();
-            if (rect) {
-                for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
-                    for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
-                        const key = positionToKey(x, y);
-                        // 【★修正★】paperDataのオブジェクトのcolorプロパティを変更
-                        if (paperData[key]) {
-                            if (e.code === 'KeyD') {
-                                paperData[key].color = null; // 色をリセット
-                            } else {
-                                paperData[key].color = colorKeys[e.code]; // 色を設定
-                            }
+function handleVisualModeKeys(e) {
+    e.preventDefault();
+    
+    // ★追加：現在のスクロール位置を記憶
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
+    const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
+    const returnToNormal = () => { currentMode = 'normal'; selectionStart = null; saveToLocalStorage(); };
+
+    if (e.key === 'Escape') { 
+        returnToNormal();
+    } else if (e.key === 'Enter') {
+        const rect = getSelectionRect();
+        if (rect) { boxes.push({ id: `box${nextId++}`, ...rect }); }
+        returnToNormal();
+    } else if (colorKeys[e.code] || e.code === 'KeyD') {
+        const rect = getSelectionRect();
+        if (rect) {
+            for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
+                for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
+                    const key = positionToKey(x, y);
+                    if (paperData[key]) {
+                        if (e.code === 'KeyD') {
+                            paperData[key].color = null;
+                        } else {
+                            paperData[key].color = colorKeys[e.code];
                         }
                     }
                 }
             }
-            returnToNormal();
-        } else if (e.key === 'Delete' || e.key === 'Backspace') {
-            const rect = getSelectionRect();
-            if (rect) {
-                boxes = boxes.filter(box => !(box.x >= rect.x && box.y >= rect.y && (box.x + box.width) <= (rect.x + rect.width) && (box.y + box.height) <= (rect.y + rect.height)));
-                arrows = arrows.filter(arrow => !arrow.path.some(p => p.x >= rect.x && p.x < rect.x + rect.width && p.y >= rect.y && p.y < rect.y + rect.height));
-            }
-            returnToNormal();
-        } else if (ARROW_DIRECTIONS[e.key]) { 
-            switch (e.key) {
-                case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
-                case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
-                case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
-                case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-            }
         }
-        render();
+        returnToNormal();
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        const rect = getSelectionRect();
+        if (rect) {
+            boxes = boxes.filter(box => !(box.x >= rect.x && box.y >= rect.y && (box.x + box.width) <= (rect.x + rect.width) && (box.y + box.height) <= (rect.y + rect.height)));
+            arrows = arrows.filter(arrow => !arrow.path.some(p => p.x >= rect.x && p.x < rect.x + rect.width && p.y >= rect.y && p.y < rect.y + rect.height));
+        }
+        returnToNormal();
+    } else if (ARROW_DIRECTIONS[e.key]) { 
+        switch (e.key) {
+            case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
+            case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
+            case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
+            case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
+        }
     }
+
+    render();
+
+    // ★追加：記憶した位置にスクロールを強制的に戻す
+    // ただし、矢印キーで範囲選択している最中はスクロールを戻さない
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
+        window.scrollTo(scrollX, scrollY);
+    }
+}
     
     function handleArrowModeKeys(e) {
         e.preventDefault();
