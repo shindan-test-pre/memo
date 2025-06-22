@@ -68,20 +68,18 @@ document.addEventListener('DOMContentLoaded', () => {
         moveCursor(GRID_SIZE, 0);
         recordHistory();
     }
-    function deleteCharBackward() { if (cursorPosition.x === 0) return; moveCursor(-GRID_SIZE, 0); deleteCharForward(); }
+    function deleteCharBackward() { if (cursorPosition.x === 0 && cursorPosition.y === 0) return; if (cursorPosition.x === 0) { /* Optional: move to end of previous line */ } else { moveCursor(-GRID_SIZE, 0); deleteCharForward(); } }
     function deleteCharForward() { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); const currentY = cursorPosition.y; delete paperData[currentKey]; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x > cursorPosition.x).sort((a, b) => a.x - b.x); charsToShift.forEach(item => { const oldKey = positionToKey(item.x, item.y); const newKey = positionToKey(item.x - GRID_SIZE, item.y); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; }); recordHistory(); }
     function updateCanvasSize() { const buffer = 300; let maxX = 0; let maxY = 0; const allPositions = [ ...Object.keys(paperData).map(parsePosition), ...boxes.flatMap(b => [{x: b.x + b.width, y: b.y + b.height}]), ...arrows.flatMap(a => a.path) ].filter(p => p); allPositions.forEach(p => { if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }); const newWidth = maxX + buffer; const newHeight = maxY + buffer; const minWidth = container.parentNode.clientWidth; const minHeight = container.parentNode.clientHeight; container.style.width = `${Math.max(minWidth, newWidth)}px`; container.style.height = `${Math.max(minHeight, newHeight)}px`; svgLayer.setAttribute('width', container.scrollWidth); svgLayer.setAttribute('height', container.scrollHeight); }
 
-    // 【Undo/Redo用】状態を記録する関数
+    // --- Undo/Redo & State Management ---
     function recordHistory() {
         const currentState = { paperData: JSON.parse(JSON.stringify(paperData)), boxes: JSON.parse(JSON.stringify(boxes)), arrows: JSON.parse(JSON.stringify(arrows)), nextId };
-        // Undo後に新しい操作をした場合、未来の履歴を削除
         if (historyIndex < history.length - 1) {
             history = history.slice(0, historyIndex + 1);
         }
         history.push(currentState);
         historyIndex++;
-        // 履歴が多すぎると重くなるので制限する（例：100件）
         if (history.length > 100) {
             history.shift();
             historyIndex--;
@@ -89,7 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
         saveToLocalStorage();
     }
 
-    // 【Undo/Redo用】特定時点の状態を復元する関数
     function loadStateFromHistory(index) {
         const state = history[index];
         if (!state) return;
@@ -107,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetMemo() {
         if (confirm('すべてのメモ内容が消去され、元に戻せません。\n本当によろしいですか？')) {
             paperData = {}; boxes = []; arrows = []; nextId = 0; cursorPosition = { x: 0, y: 0 }; currentMode = 'normal'; selectionStart = null; currentArrowPath = [];
-            recordHistory(); // 空の状態を履歴に記録
+            recordHistory();
             render();
         }
     }
@@ -161,15 +158,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveToLocalStorage() { try { localStorage.setItem(LOCAL_STORAGE_KEY, serializeState()); } catch (error) { console.error("Failed to save to localStorage:", error); } }
     function loadFromLocalStorage() { if (localStorage.getItem(LOCAL_STORAGE_KEY)) { return deserializeState(localStorage.getItem(LOCAL_STORAGE_KEY)); } return false; }
     function exportToFile() { const stateJson = serializeState(); const blob = new Blob([stateJson], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `memo-${Date.now()}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
-    function importFromFile() { const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json'; input.onchange = (event) => { const file = event.target.files[0]; if (!file) return; if (!confirm('現在の内容は上書きされます。よろしいですか？')) return; const reader = new FileReader(); reader.onload = (e) => { if (deserializeState(e.target.result)) { console.log("Imported and rendered"); } }; reader.readAsText(file); }; input.click(); }
+    function importFromFile() { const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json'; input.onchange = (event) => { const file = event.target.files[0]; if (!file) return; if (!confirm('現在の内容は上書きされます。よろしいですか？')) return; const reader = new FileReader(); reader.onload = (e) => { const success = deserializeState(e.target.result); if (!success) { alert("ファイルの読み込みに失敗しました。形式が違う可能性があります。"); history = []; historyIndex = -1; recordHistory(); render(); } }; reader.readAsText(file); }; input.click(); }
 
     // --- キーボードイベントハンドラ ---
     function handleNormalModeKeys(e) {
-        if ((e.key === 'e' || e.key === 'l') && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; } 
-            else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; }
-            render();
+        if ((e.ctrlKey || e.metaKey)) {
+            if (e.key === 'e' || e.key === 'l') {
+                e.preventDefault();
+                if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; } 
+                else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; }
+                render();
+            }
         } else {
             const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
             if (controlKeys.includes(e.key)) {
@@ -179,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
                     case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
                     case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-                    case 'Enter': cursorPosition.y += GRID_SIZE; cursorPosition.x = 0; break; // Enterは履歴記録しない
+                    case 'Enter': cursorPosition.y += GRID_SIZE; cursorPosition.x = 0; break;
                     case 'Backspace': deleteCharBackward(); break;
                     case 'Delete': deleteCharForward(); break;
                 }
@@ -187,10 +186,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
-
+    
+    // 【★修正箇所★】バグを修正し、全ての機能を正しく統合
     function handleVisualModeKeys(e) {
         e.preventDefault();
-        const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
         let stateChanged = false;
 
         const applyStyleToSelection = (style, value) => {
@@ -210,6 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             stateChanged = true;
         };
+
+        const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
 
         if (e.key === 'Escape') { currentMode = 'normal'; selectionStart = null; } 
         else if (e.key === 'Enter') {
@@ -268,10 +269,13 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('keydown', (e) => {
         if (currentMode === 'modal') { if (e.key === 'Escape') { closeHelpModal(); } return; }
         if ((e.ctrlKey || e.metaKey)) {
-            // Undo/Redo
-            if (e.key === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
-            if (e.key === 'y') { e.preventDefault(); redo(); return; }
+            // Undo/Redo は最優先で処理
+            if (e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+            if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+            // テキストスタイル変更もここで捕捉（選択モードの時だけ実行される）
+            if (currentMode === 'visual' && (e.code === 'KeyB' || e.code === 'KeyU')) { handleVisualModeKeys(e); return; }
 
+            // その他のグローバルショートカット
             if (e.key === 's' || e.key === 'o') { e.preventDefault(); if (e.key === 's') exportToFile(); if (e.key === 'o') importFromFile(); }
             if (e.shiftKey && e.key === 'Backspace') { e.preventDefault(); resetMemo(); }
             if (e.key === '/') { e.preventDefault(); openHelpModal(); }
@@ -279,10 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    hiddenInput.addEventListener('keydown', (e) => {
-        if (isComposing || currentMode !== 'normal') return;
-        handleNormalModeKeys(e);
-    });
+    hiddenInput.addEventListener('keydown', (e) => { if (isComposing || currentMode !== 'normal') return; handleNormalModeKeys(e); });
     hiddenInput.addEventListener('compositionstart', () => { isComposing = true; compositionText = ''; });
     hiddenInput.addEventListener('compositionupdate', (e) => { compositionText = e.data || ''; render(); });
     hiddenInput.addEventListener('compositionend', (e) => { isComposing = false; compositionText = ''; handleTextInput(e.data || ''); e.target.value = ''; });
@@ -293,14 +294,14 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentMode === 'arrow') { handleArrowModeKeys(e); }
     });
 
-    container.addEventListener('click', (event) => {  const rect = container.getBoundingClientRect(); const x = event.clientX - rect.left + container.scrollLeft; const y = event.clientY - rect.top + container.scrollTop; cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE; cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE; if (currentMode !== 'normal') { currentMode = 'normal'; selectionStart = null; currentArrowPath = []; } render(); });
+    container.addEventListener('click', (event) => { const rect = container.getBoundingClientRect(); const x = event.clientX - rect.left + container.scrollLeft; const y = event.clientY - rect.top + container.scrollTop; cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE; cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE; if (currentMode !== 'normal') { currentMode = 'normal'; selectionStart = null; currentArrowPath = []; } render(); });
     
     closeHelpModalBtn.addEventListener('click', closeHelpModal);
     helpModal.addEventListener('click', (e) => { if (e.target === helpModal) { closeHelpModal(); } });
 
     // --- 初期化 ---
     if (!loadFromLocalStorage()) {
-        recordHistory(); // 空の初期状態を履歴に記録
+        recordHistory();
     }
     render();
     window.scrollTo(0, 0);
