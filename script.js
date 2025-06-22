@@ -20,9 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const LOCAL_STORAGE_KEY = 'simpleMemoAppState';
 
     // 状態管理
-    let paperData = {};
-    let colorData = {};
-    let underlineData = {}; // 【★追加★】下線情報を管理
+    let paperData = {}; // ★colorDataはここに統合される
     let boxes = [];
     let arrows = [];
     let nextId = 0;
@@ -42,20 +40,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function moveCursor(dx, dy) { cursorPosition.x = Math.max(0, cursorPosition.x + dx); cursorPosition.y = Math.max(0, cursorPosition.y + dy); }
     function createArrowMarker() { const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker'); marker.id = 'arrowhead'; marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5'); marker.setAttribute('markerWidth', '5'); marker.setAttribute('markerHeight', '5'); marker.setAttribute('orient', 'auto-start-reverse'); const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); pathEl.setAttribute('fill', '#333'); marker.appendChild(pathEl); defs.appendChild(marker); return defs; }
     
-    function createCharCell(char, x, y, isComposingChar = false) {
+    // 【★修正★】文字オブジェクトを受け取るように変更
+    function createCharCell(charObject, x, y, isComposingChar = false) {
         const charCell = document.createElement('div');
         charCell.className = 'char-cell';
-        if (isComposingChar) { charCell.classList.add('composing-char'); }
+        if (isComposingChar) {
+            charCell.classList.add('composing-char');
+        }
         
-        const key = positionToKey(x, y);
-        const color = colorData[key];
-        if (color) { charCell.classList.add(`text-${color}`); }
-
-        // 【★追加★】下線情報をチェックしてスタイルを適用
-        if (underlineData[key]) {
-            charCell.style.textDecoration = 'underline';
+        const color = charObject.color;
+        if (color) {
+            charCell.classList.add(`text-${color}`);
         }
 
+        const char = charObject.char;
         charCell.style.left = `${x}px`;
         charCell.style.top = `${y}px`;
         charCell.innerText = char === '\n' ? '' : char;
@@ -63,17 +61,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function getSelectionRect() { if (!selectionStart) return null; const x1 = Math.min(selectionStart.x, cursorPosition.x); const y1 = Math.min(selectionStart.y, cursorPosition.y); const x2 = Math.max(selectionStart.x, cursorPosition.x); const y2 = Math.max(selectionStart.y, cursorPosition.y); return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE }; }
-    function insertChar(char) { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); const currentY = cursorPosition.y; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x >= cursorPosition.x).sort((a, b) => b.x - a.x); charsToShift.forEach(item => { const newKey = positionToKey(item.x + GRID_SIZE, item.y); paperData[newKey] = paperData[positionToKey(item.x, item.y)]; delete paperData[positionToKey(item.x, item.y)]; }); paperData[currentKey] = char; moveCursor(GRID_SIZE, 0); }
+    
+    // 【★修正★】文字オブジェクトを作成して保存するように変更
+    function insertChar(char) {
+        const currentKey = positionToKey(cursorPosition.x, cursorPosition.y);
+        const currentY = cursorPosition.y;
+        const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x >= cursorPosition.x).sort((a, b) => b.x - a.x);
+        charsToShift.forEach(item => {
+            const oldKey = positionToKey(item.x, item.y);
+            const newKey = positionToKey(item.x + GRID_SIZE, item.y);
+            paperData[newKey] = paperData[oldKey];
+            delete paperData[oldKey];
+        });
+        paperData[currentKey] = { char: char, color: null }; // デフォルトは色なし
+        moveCursor(GRID_SIZE, 0);
+    }
     function deleteCharBackward() { if (cursorPosition.x === 0) return; moveCursor(-GRID_SIZE, 0); deleteCharForward(); }
-    function deleteCharForward() { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); const currentY = cursorPosition.y; delete paperData[currentKey]; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x > cursorPosition.x).sort((a, b) => a.x - b.x); charsToShift.forEach(item => { const newKey = positionToKey(item.x - GRID_SIZE, item.y); paperData[newKey] = paperData[positionToKey(item.x, item.y)]; delete paperData[positionToKey(item.x, item.y)]; }); }
+    function deleteCharForward() { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); const currentY = cursorPosition.y; delete paperData[currentKey]; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x > cursorPosition.x).sort((a, b) => a.x - b.x); charsToShift.forEach(item => { const oldKey = positionToKey(item.x, item.y); const newKey = positionToKey(item.x - GRID_SIZE, item.y); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; }); }
     function updateCanvasSize() { const buffer = 300; let maxX = 0; let maxY = 0; const allPositions = [ ...Object.keys(paperData).map(parsePosition), ...boxes.flatMap(b => [{x: b.x + b.width, y: b.y + b.height}]), ...arrows.flatMap(a => a.path) ].filter(p => p); allPositions.forEach(p => { if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }); const newWidth = maxX + buffer; const newHeight = maxY + buffer; const minWidth = container.parentNode.clientWidth; const minHeight = container.parentNode.clientHeight; container.style.width = `${Math.max(minWidth, newWidth)}px`; container.style.height = `${Math.max(minHeight, newHeight)}px`; svgLayer.setAttribute('width', container.scrollWidth); svgLayer.setAttribute('height', container.scrollHeight); }
 
     /** メモ全体をリセットする関数 */
     function resetMemo() {
         if (confirm('すべてのメモ内容が消去され、元に戻せません。\n本当によろしいですか？')) {
             paperData = {};
-            colorData = {};
-            underlineData = {}; // 【★追加★】
+            // colorDataは不要に
             boxes = [];
             arrows = [];
             nextId = 0;
@@ -104,13 +115,25 @@ document.addEventListener('DOMContentLoaded', () => {
         elementsToRemove.forEach(el => el.remove());
         svgLayer.innerHTML = '';
         svgLayer.appendChild(createArrowMarker());
-        const drawArrowPath = (path, isPreview = false) => { if (path.length < 2) return; const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline'); const points = path.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' '); polyline.setAttribute('points', points); polyline.setAttribute('class', 'arrow-line'); polyline.setAttribute('fill', 'none'); if (isPreview) { polyline.style.opacity = '0.5'; } else { polyline.setAttribute('marker-end', 'url(#arrowhead)'); } svgLayer.appendChild(polyline); };
+        const drawArrowPath = (path, isPreview = false) => {
+            if (path.length < 2) return;
+            const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            const points = path.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' ');
+            polyline.setAttribute('points', points);
+            polyline.setAttribute('class', 'arrow-line');
+            polyline.setAttribute('fill', 'none');
+            if (isPreview) { polyline.style.opacity = '0.5'; } else { polyline.setAttribute('marker-end', 'url(#arrowhead)'); }
+            svgLayer.appendChild(polyline);
+        };
         arrows.forEach(arrow => drawArrowPath(arrow.path));
         if (currentMode === 'arrow') drawArrowPath(currentArrowPath, true);
         boxes.forEach(box => { const boxEl = document.createElement('div'); boxEl.classList.add('border-box'); boxEl.style.left = `${box.x}px`; boxEl.style.top = `${box.y}px`; boxEl.style.width = `${box.width}px`; boxEl.style.height = `${box.height}px`; container.appendChild(boxEl); });
+        
+        // 【★修正★】paperData[key]がオブジェクトであることを前提にcreateCharCellを呼ぶ
         Object.keys(paperData).forEach(key => { const pos = parsePosition(key); if (pos) createCharCell(paperData[key], pos.x, pos.y); });
+        
         if (currentMode === 'visual' && selectionStart) { const rect = getSelectionRect(); if (rect) { const highlightEl = document.createElement('div'); highlightEl.classList.add('selection-highlight'); highlightEl.style.left = `${rect.x}px`; highlightEl.style.top = `${rect.y}px`; highlightEl.style.width = `${rect.width}px`; highlightEl.style.height = `${rect.height}px`; container.appendChild(highlightEl); } }
-        if (isComposing && compositionText) { let tempX = cursorPosition.x; for (const char of compositionText) { createCharCell(char, tempX, cursorPosition.y, true); tempX += GRID_SIZE; } }
+        if (isComposing && compositionText) { let tempX = cursorPosition.x; for (const char of compositionText) { createCharCell({ char: char, color: null }, tempX, cursorPosition.y, true); tempX += GRID_SIZE; } }
         const cursorX = cursorPosition.x + (isComposing ? compositionText.length * GRID_SIZE : 0);
         cursorElement.style.left = `${cursorX}px`;
         cursorElement.style.top = `${cursorPosition.y}px`;
@@ -122,17 +145,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // --- データ保存・読み込み関連 ---
-    function serializeState() { return JSON.stringify({ paperData, colorData, underlineData, boxes, arrows, nextId }); } // 【★追加★】
+    // 【★修正★】colorDataを削除
+    function serializeState() { return JSON.stringify({ paperData, boxes, arrows, nextId }); }
     function deserializeState(jsonString) { 
         try { 
             const state = JSON.parse(jsonString);
             if (state && typeof state.paperData === 'object' && Array.isArray(state.boxes) && Array.isArray(state.arrows)) {
-                paperData = state.paperData; 
-                colorData = state.colorData || {};
-                underlineData = state.underlineData || {}; // 【★追加★】
+                paperData = state.paperData;
                 boxes = state.boxes; 
                 arrows = state.arrows; 
-                nextId = state.nextId || 0; 
+                nextId = state.nextId || 0;
+                
+                // 【★追加★】古いデータ形式との互換性を保つための処理
+                for (const key in paperData) {
+                    if (typeof paperData[key] === 'string') {
+                        const char = paperData[key];
+                        paperData[key] = { char: char, color: null };
+                        // 昔のcolorDataも存在すれば、そこから色情報を復元する
+                        if (state.colorData && state.colorData[key]) {
+                            paperData[key].color = state.colorData[key];
+                        }
+                    }
+                }
                 return true; 
             } else { alert('無効なファイル形式です。'); return false; } 
         } catch (error) { alert('ファイルの読み込みに失敗しました。'); console.error("Failed to parse state:", error); return false; } 
@@ -144,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- キーボードイベントハンドラ ---
     function handleNormalModeKeys(e) {
-        if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'l')) {
+        if ((e.key === 'e' || e.key === 'l') && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; } 
             else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; }
@@ -184,26 +218,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
                     for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
                         const key = positionToKey(x, y);
+                        // 【★修正★】paperDataのオブジェクトのcolorプロパティを変更
                         if (paperData[key]) {
-                            if (e.code === 'KeyD') { delete colorData[key]; } else { colorData[key] = colorKeys[e.code]; }
-                        }
-                    }
-                }
-            }
-            returnToNormal();
-        // 【★追加★】Uキーで下線をトグルし、ノーマルモードに戻る
-        } else if (e.code === 'KeyU') {
-            const rect = getSelectionRect();
-            if (rect) {
-                for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
-                    for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
-                        const key = positionToKey(x, y);
-                        if (paperData[key]) {
-                            // すでに下線があれば削除(OFF)、なければ追加(ON)
-                            if (underlineData[key]) {
-                                delete underlineData[key];
+                            if (e.code === 'KeyD') {
+                                paperData[key].color = null; // 色をリセット
                             } else {
-                                underlineData[key] = true;
+                                paperData[key].color = colorKeys[e.code]; // 色を設定
                             }
                         }
                     }
@@ -232,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const lastPoint = currentArrowPath[currentArrowPath.length - 1];
         if (!lastPoint) { currentMode = 'normal'; render(); return; }
+        
         if (ARROW_DIRECTIONS[e.key]) {
             let nextPoint = { ...lastPoint };
             switch (e.key) {
@@ -246,7 +267,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 cursorPosition.y = nextPoint.y;
             }
         } else if (e.key === 'Enter') {
-            if (currentArrowPath.length > 1) { arrows.push({ id: `arrow${nextId++}`, path: currentArrowPath }); saveToLocalStorage(); }
+            if (currentArrowPath.length > 1) {
+                arrows.push({ id: `arrow${nextId++}`, path: currentArrowPath });
+                saveToLocalStorage();
+            }
             currentMode = 'normal';
             currentArrowPath = [];
         } else if (e.key === 'Escape') {
@@ -260,8 +284,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMode !== 'normal') return; 
         if (text) {
             for (const char of text) { insertChar(char); }
-            saveToLocalStorage(); // ループの外で一度だけ保存
             render();
+            saveToLocalStorage();
         }
     }
 
@@ -279,41 +303,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // テキスト入力関連のイベントは hiddenInput で処理
     hiddenInput.addEventListener('keydown', (e) => {
-        if (isComposing) return;
-        // モード別の処理
-        switch (currentMode) {
-            case 'normal': handleNormalModeKeys(e); break;
-            case 'visual':
-            case 'arrow':
-                 // visualとarrowモードのキー入力はcontainerで処理するので、ここでは何もしない
-                break;
-        }
+        if (isComposing || currentMode !== 'normal') return;
+        handleNormalModeKeys(e);
     });
     hiddenInput.addEventListener('compositionstart', () => { isComposing = true; compositionText = ''; });
     hiddenInput.addEventListener('compositionupdate', (e) => { compositionText = e.data || ''; render(); });
     hiddenInput.addEventListener('compositionend', (e) => { isComposing = false; compositionText = ''; handleTextInput(e.data || ''); e.target.value = ''; });
     hiddenInput.addEventListener('input', (e) => { if (isComposing) return; handleTextInput(e.target.value); e.target.value = ''; });
 
+    // コマンド系のイベントは container で処理
     container.addEventListener('keydown', (e) => {
-        if (currentMode === 'visual') { handleVisualModeKeys(e); } 
-        else if (currentMode === 'arrow') { handleArrowModeKeys(e); }
+        if (currentMode === 'visual') {
+            handleVisualModeKeys(e);
+        } else if (currentMode === 'arrow') {
+            handleArrowModeKeys(e);
+        }
     });
 
+    // クリックイベント
     container.addEventListener('click', (event) => { 
-        currentMode = 'normal';
-        selectionStart = null;
-        currentArrowPath = [];
         const rect = container.getBoundingClientRect(); 
         const x = event.clientX - rect.left + container.scrollLeft; 
         const y = event.clientY - rect.top + container.scrollTop; 
         cursorPosition.x = Math.floor(x / GRID_SIZE) * GRID_SIZE; 
         cursorPosition.y = Math.floor(y / GRID_SIZE) * GRID_SIZE; 
+        if (currentMode !== 'normal') {
+            currentMode = 'normal';
+            selectionStart = null;
+            currentArrowPath = [];
+        }
         render(); 
     });
     
     closeHelpModalBtn.addEventListener('click', closeHelpModal);
-    helpModal.addEventListener('click', (e) => { if (e.target === helpModal) { closeHelpModal(); } });
+    helpModal.addEventListener('click', (e) => {
+        if (e.target === helpModal) { closeHelpModal(); }
+    });
 
     // --- 初期化 ---
     loadFromLocalStorage();
