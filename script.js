@@ -79,7 +79,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 変更を履歴に記録し、再描画
         recordHistory();
-        render();
     }
     
     // 【★修正★】文字オブジェクトを受け取るように変更
@@ -237,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
                     case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
                     case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-                    case 'Enter': insertNewLine(); return;
+                    case 'Enter': insertNewLine(); break;
                     case 'Backspace': deleteCharBackward(); break;
                     case 'Delete': deleteCharForward(); break;
                 }
