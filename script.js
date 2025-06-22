@@ -39,6 +39,48 @@ document.addEventListener('DOMContentLoaded', () => {
     function positionToKey(x, y) { return `${x},${y}`; }
     function moveCursor(dx, dy) { cursorPosition.x = Math.max(0, cursorPosition.x + dx); cursorPosition.y = Math.max(0, cursorPosition.y + dy); }
     function createArrowMarker() { const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker'); marker.id = 'arrowhead'; marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5'); marker.setAttribute('markerWidth', '5'); marker.setAttribute('markerHeight', '5'); marker.setAttribute('orient', 'auto-start-reverse'); const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); pathEl.setAttribute('fill', '#333'); marker.appendChild(pathEl); defs.appendChild(marker); return defs; }
+    // script.js のヘルパー関数群の末尾などに追加
+
+    function insertNewLine() {
+        const shiftThresholdY = cursorPosition.y + GRID_SIZE;
+
+        // --- paperDataを下にシフト ---
+        const charsToShift = Object.keys(paperData)
+            .map(parsePosition)
+            .filter(p => p && p.y >= shiftThresholdY)
+            .sort((a, b) => b.y - a.y || b.x - a.x); // 下の行から順に処理
+
+        for (const pos of charsToShift) {
+            const oldKey = positionToKey(pos.x, pos.y);
+            const newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
+            paperData[newKey] = paperData[oldKey];
+            delete paperData[oldKey];
+        }
+
+        // --- boxesを下にシフト ---
+        boxes.forEach(box => {
+            if (box.y >= shiftThresholdY) {
+                box.y += GRID_SIZE;
+            }
+        });
+
+        // --- arrowsを下にシフト ---
+        arrows.forEach(arrow => {
+            arrow.path.forEach(point => {
+                if (point.y >= shiftThresholdY) {
+                    point.y += GRID_SIZE;
+                }
+            });
+        });
+
+        // カーソルを新しくできた行の先頭に移動
+        cursorPosition.x = 0;
+        cursorPosition.y = shiftThresholdY;
+
+        // 変更を履歴に記録し、再描画
+        recordHistory();
+        render();
+    }
     
     // 【★修正★】文字オブジェクトを受け取るように変更
     function createCharCell(charObject, x, y, isComposingChar = false) {
@@ -195,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
                     case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
                     case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-                    case 'Enter': cursorPosition.y += GRID_SIZE; cursorPosition.x = 0; break;
+                    case 'Enter': insertNewLine(); return;
                     case 'Backspace': deleteCharBackward(); break;
                     case 'Delete': deleteCharForward(); break;
                 }
