@@ -22,127 +22,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 状態管理
     let paperData = {}; // ★colorDataはここに統合される
-
     let boxes = [];
-
     let arrows = [];
-
     let nextId = 0;
-
     let cursorPosition = { x: 0, y: 0 };
-
     let currentMode = 'normal';
-
     let selectionStart = null;
-
     let currentArrowPath = [];
-
     let isComposing = false;
-
     let compositionText = '';
-
-
-
     const cursorElement = document.createElement('div');
-
     cursorElement.classList.add('cursor');
 
-
-
     // --- ヘルパー関数群 ---
-
     function parsePosition(key) { try { const [x, y] = key.split(',').map(Number); if (isNaN(x) || isNaN(y)) return null; return { x, y }; } catch (error) { console.warn('Position parsing error:', error); return null; } }
-
     function positionToKey(x, y) { return `${x},${y}`; }
-
     function moveCursor(dx, dy) { cursorPosition.x = Math.max(0, cursorPosition.x + dx); cursorPosition.y = Math.max(0, cursorPosition.y + dy); }
-
     function createArrowMarker() { const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker'); marker.id = 'arrowhead'; marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5'); marker.setAttribute('markerWidth', '5'); marker.setAttribute('markerHeight', '5'); marker.setAttribute('orient', 'auto-start-reverse'); const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); pathEl.setAttribute('fill', '#333'); marker.appendChild(pathEl); defs.appendChild(marker); return defs; }
 
-    
-
     // 【★修正★】文字オブジェクトを受け取るように変更
-
     function createCharCell(charObject, x, y, isComposingChar = false) {
-
         const charCell = document.createElement('div');
-
         charCell.className = 'char-cell';
-
         if (isComposingChar) {
-
             charCell.classList.add('composing-char');
-
         }
-
-        
-
         const color = charObject.color;
-
         if (color) {
-
             charCell.classList.add(`text-${color}`);
-
         }
-
-
-
         const char = charObject.char;
-
         charCell.style.left = `${x}px`;
-
         charCell.style.top = `${y}px`;
-
         charCell.innerText = char === '\n' ? '' : char;
-
         container.appendChild(charCell);
-
     }
-
-    
-
     function getSelectionRect() { if (!selectionStart) return null; const x1 = Math.min(selectionStart.x, cursorPosition.x); const y1 = Math.min(selectionStart.y, cursorPosition.y); const x2 = Math.max(selectionStart.x, cursorPosition.x); const y2 = Math.max(selectionStart.y, cursorPosition.y); return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE }; }
 
-    
-
     // 【★修正★】文字オブジェクトを作成して保存するように変更
-
     function insertChar(char) {
-
         const currentKey = positionToKey(cursorPosition.x, cursorPosition.y);
-
         const currentY = cursorPosition.y;
-
         const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x >= cursorPosition.x).sort((a, b) => b.x - a.x);
-
         charsToShift.forEach(item => {
-
             const oldKey = positionToKey(item.x, item.y);
-
             const newKey = positionToKey(item.x + GRID_SIZE, item.y);
-
             paperData[newKey] = paperData[oldKey];
-
             delete paperData[oldKey];
-
         });
-
         paperData[currentKey] = { char: char, color: null }; // デフォルトは色なし
-
         moveCursor(GRID_SIZE, 0);
-
     }
-
     function deleteCharBackward() { if (cursorPosition.x === 0) return; moveCursor(-GRID_SIZE, 0); deleteCharForward(); }
 
     function deleteCharForward() { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); const currentY = cursorPosition.y; delete paperData[currentKey]; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x > cursorPosition.x).sort((a, b) => a.x - b.x); charsToShift.forEach(item => { const oldKey = positionToKey(item.x, item.y); const newKey = positionToKey(item.x - GRID_SIZE, item.y); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; }); }
 
     function updateCanvasSize() { const buffer = 300; let maxX = 0; let maxY = 0; const allPositions = [ ...Object.keys(paperData).map(parsePosition), ...boxes.flatMap(b => [{x: b.x + b.width, y: b.y + b.height}]), ...arrows.flatMap(a => a.path) ].filter(p => p); allPositions.forEach(p => { if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }); const newWidth = maxX + buffer; const newHeight = maxY + buffer; const minWidth = container.parentNode.clientWidth; const minHeight = container.parentNode.clientHeight; container.style.width = `${Math.max(minWidth, newWidth)}px`; container.style.height = `${Math.max(minHeight, newHeight)}px`; svgLayer.setAttribute('width', container.scrollWidth); svgLayer.setAttribute('height', container.scrollHeight); }
 
-
-
     /** メモ全体をリセットする関数 */
-
     function resetMemo() {
 
         if (confirm('すべてのメモ内容が消去され、元に戻せません。\n本当によろしいですか？')) {
