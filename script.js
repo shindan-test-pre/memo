@@ -39,36 +39,82 @@ document.addEventListener('DOMContentLoaded', () => {
     function positionToKey(x, y) { return `${x},${y}`; }
     function moveCursor(dx, dy) { cursorPosition.x = Math.max(0, cursorPosition.x + dx); cursorPosition.y = Math.max(0, cursorPosition.y + dy); }
     function createArrowMarker() { const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker'); marker.id = 'arrowhead'; marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5'); marker.setAttribute('markerWidth', '5'); marker.setAttribute('markerHeight', '5'); marker.setAttribute('orient', 'auto-start-reverse'); const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); pathEl.setAttribute('fill', '#333'); marker.appendChild(pathEl); defs.appendChild(marker); return defs; }
-// script.js のヘルパー関数群のセクションに追加
-
+    // script.js のヘルパー関数群のセクションに追加
     function splitLine() {
-        const currentX = cursorPosition.x;
-        const currentY = cursorPosition.y;
-        const shiftStartY = currentY + GRID_SIZE;
+        const cursorX = cursorPosition.x;
+        const cursorY = cursorPosition.y;
+        const newY = cursorY + GRID_SIZE;
+        // --- ステップ1: これから移動させる要素をリストアップする ---
+        const charsToMoveOnCurrentLine = [];
+        const contentToShiftBelow = [];
+        Object.keys(paperData).forEach(key => {
+            const pos = parsePosition(key);
+            if (!pos) return;
+            if (pos.y === cursorY && pos.x >= cursorX) {
+                charsToMoveOnCurrentLine.push(key);
+            } else if (pos.y > cursorY) {
+                contentToShiftBelow.push(key);
+            }
+        });
+        // --- ステップ2: 現在の行より下のコンテンツをすべて1段下にシフト ---
+        // (安全のため、キーを座標に変換して、下の行から順にソート)
+        contentToShiftBelow.sort((a, b) => parsePosition(b).y - parsePosition(a).y || parsePosition(b).x - parsePosition(a).x);
+        for (const oldKey of contentToShiftBelow) {
+            const pos = parsePosition(oldKey);
+            const newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
+            paperData[newKey] = paperData[oldKey];
+            if (colorData && colorData[oldKey]) { colorData[newKey] = colorData[oldKey]; delete colorData[oldKey]; }
+            delete paperData[oldKey];
+        }
+        boxes.forEach(box => { if (box.y > cursorY) { box.y += GRID_SIZE; } });
+        arrows.forEach(arrow => { arrow.path.forEach(point => { if (point.y > cursorY) { point.y += GRID_SIZE; } }); });
 
-        // --- 1. 現在の行より下の全要素を1段下げる ---
-        const allKeysToShift = Object.keys(paperData).map(parsePosition).filter(p => p && p.y >= shiftStartY).sort((a, b) => b.y - a.y || b.x - a.x);
-        for (const pos of allKeysToShift) { const oldKey = positionToKey(pos.x, pos.y); const newKey = positionToKey(pos.x, pos.y + GRID_SIZE); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; }
-        if (typeof colorData !== 'undefined') { const allColorKeysToShift = Object.keys(colorData).map(parsePosition).filter(p => p && p.y >= shiftStartY).sort((a, b) => b.y - a.y || b.x - a.x); for (const pos of allColorKeysToShift) { const oldKey = positionToKey(pos.x, pos.y); const newKey = positionToKey(pos.x, pos.y + GRID_SIZE); colorData[newKey] = colorData[oldKey]; delete colorData[oldKey]; } }
-        boxes.forEach(box => { if (box.y >= shiftStartY) { box.y += GRID_SIZE; } });
-        arrows.forEach(arrow => { arrow.path.forEach(point => { if (point.y >= shiftStartY) { point.y += GRID_SIZE; } }); });
-        
-        // --- 2. 現在の行の、カーソル位置以降の文字を新しい行に移動 ---
-        const charsToMove = Object.keys(paperData).map(parsePosition).filter(p => p && p.y === currentY && p.x >= currentX).sort((a, b) => a.x - b.x);
-        for (const pos of charsToMove) {
-            const oldKey = positionToKey(pos.x, pos.y);
-            const newKey = positionToKey(pos.x - currentX, pos.y + GRID_SIZE);
+        // --- ステップ3: 現在の行の後半部分を、新しくできた行の先頭に移動 ---
+        charsToMoveOnCurrentLine.sort((a, b) => parsePosition(a).x - parsePosition(b).x);
+        for (const oldKey of charsToMoveOnCurrentLine) {
+            const pos = parsePosition(oldKey);
+            const newKey = positionToKey(pos.x - cursorX, newY);
             paperData[newKey] = paperData[oldKey];
             if (colorData && colorData[oldKey]) { colorData[newKey] = colorData[oldKey]; delete colorData[oldKey]; }
             delete paperData[oldKey];
         }
 
-        // --- 3. カーソル位置を更新 ---
+        // --- ステップ4: カーソル位置を更新 ---
         cursorPosition.x = 0;
-        cursorPosition.y += GRID_SIZE;
+        cursorPosition.y = newY;
         return true; // 状態が変更されたことを示す
     }
 
+    function mergeLineUp() {
+        if (cursorPosition.x !== 0 || cursorPosition.y === 0) return false;
+
+        const currentY = cursorPosition.y;
+        const prevY = currentY - GRID_SIZE;
+        
+        let endOfPrevLineX = 0;
+        Object.keys(paperData).map(parsePosition).filter(p => p && p.y === prevY).forEach(p => { if (p.x >= endOfPrevLineX) { endOfPrevLineX = p.x + GRID_SIZE; } });
+        
+        const charsToMove = Object.keys(paperData).map(parsePosition).filter(p => p && p.y === currentY).sort((a, b) => a.x - b.x);
+        for (const pos of charsToMove) {
+            const oldKey = positionToKey(pos.x, pos.y);
+            const newKey = positionToKey(endOfPrevLineX + pos.x, prevY);
+            paperData[newKey] = paperData[oldKey];
+            if (colorData && colorData[oldKey]) { colorData[newKey] = colorData[oldKey]; delete colorData[oldKey]; }
+            delete paperData[oldKey];
+        }
+        
+        const shiftStartY = currentY + GRID_SIZE;
+        const allKeysToShift = Object.keys(paperData).map(parsePosition).filter(p => p && p.y >= shiftStartY).sort((a, b) => a.y - a.y || a.x - a.x);
+        for (const pos of allKeysToShift) { const oldKey = positionToKey(pos.x, pos.y); const newKey = positionToKey(pos.x, pos.y - GRID_SIZE); paperData[newKey] = paperData[oldKey]; if (colorData && colorData[oldKey]) { colorData[newKey] = colorData[oldKey]; delete colorData[oldKey]; } delete paperData[oldKey]; }
+        boxes.forEach(box => { if (box.y >= shiftStartY) { box.y -= GRID_SIZE; } });
+        arrows.forEach(arrow => { arrow.path.forEach(point => { if (point.y >= shiftStartY) { point.y -= GRID_SIZE; } }); });
+
+        cursorPosition.x = endOfPrevLineX;
+        cursorPosition.y = prevY;
+        return true;
+    }
+
+//ここから違う処理
     function mergeLineUp() {
         if (cursorPosition.x !== 0 || cursorPosition.y === 0) return false;
 
@@ -286,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function importFromFile() { const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json'; input.onchange = (event) => { const file = event.target.files[0]; if (!file) return; if (!confirm('現在の内容は上書きされます。よろしいですか？')) return; const reader = new FileReader(); reader.onload = (e) => { if (deserializeState(e.target.result)) { render(); } }; reader.readAsText(file); }; input.click(); }
 
     // --- キーボードイベントハンドラ ---
-// handleNormalModeKeys 関数を丸ごと置き換え
+    // handleNormalModeKeys 関数を丸ごと置き換え
 function handleNormalModeKeys(e) {
     let stateChanged = false;
     if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'l')) {
@@ -311,10 +357,8 @@ function handleNormalModeKeys(e) {
                 stateChanged = splitLine();
                 break;
             case 'Backspace':
-                // 行頭なら上の行と結合、そうでなければ一文字削除
-                if (cursorPosition.x === 0 && cursorPosition.y > 0) {
-                    stateChanged = mergeLineUp();
-                } else {
+                stateChanged = mergeLineUp();
+                if (!stateChanged) { // mergeLineUpが実行されなかった場合（行頭でないなど）
                     stateChanged = deleteCharBackward();
                 }
                 break;
