@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(cursorElement);
         hiddenInput.style.left = `${cursorX}px`;
         hiddenInput.style.top = `${cursorPosition.y}px`;
-        if (currentMode === 'normal') { hiddenInput.focus(); } else { container.focus(); }
+        if (currentMode === 'normal') { hiddenInput.focus({preventScroll: true }); } else { container.focus({ preventScrpll: true }); }
         updateCanvasSize();
     }
     
