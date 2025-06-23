@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const LOCAL_STORAGE_KEY = 'simpleMemoAppState';
 
     // 状態管理
-    let paperData = {}; // ★colorDataはここに統合される
+    let paperData = {};
     let boxes = [];
     let arrows = [];
     let nextId = 0;
@@ -39,200 +39,25 @@ document.addEventListener('DOMContentLoaded', () => {
     function positionToKey(x, y) { return `${x},${y}`; }
     function moveCursor(dx, dy) { cursorPosition.x = Math.max(0, cursorPosition.x + dx); cursorPosition.y = Math.max(0, cursorPosition.y + dy); }
     function createArrowMarker() { const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker'); marker.id = 'arrowhead'; marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5'); marker.setAttribute('markerWidth', '5'); marker.setAttribute('markerHeight', '5'); marker.setAttribute('orient', 'auto-start-reverse'); const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); pathEl.setAttribute('fill', '#333'); marker.appendChild(pathEl); defs.appendChild(marker); return defs; }
-    // script.js のヘルパー関数群のセクションに追加
-     // splitLine と mergeLineUp の2つの関数を、以下のコードに置き換えてください
-    function splitLine() {
-        const cursorX = cursorPosition.x;
-        const cursorY = cursorPosition.y;
-        const newY = cursorY + GRID_SIZE;
-        const newPaperData = {};
-        const newBoxes = [...boxes]; // boxesとarrowsはコピーから始める
-        const newArrows = JSON.parse(JSON.stringify(arrows));
-
-        // --- 文字データを再構築 ---
-        for (const key in paperData) {
-            const pos = parsePosition(key);
-            if (!pos) continue;
-            let newKey;
-            if (pos.y < cursorY) {
-                newKey = key;
-            } else if (pos.y === cursorY) {
-                if (pos.x < cursorX) {
-                    newKey = key;
-                } else {
-                    newKey = positionToKey(pos.x - cursorX, newY);
-                }
-            } else { // pos.y > cursorY
-                newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
-            }
-            newPaperData[newKey] = paperData[key];
-        }
-
-        // --- boxesとarrowsをシフト ---
-        newBoxes.forEach(box => { if (box.y >= cursorY) { box.y += GRID_SIZE; } });
-        newArrows.forEach(arrow => { arrow.path.forEach(point => { if (point.y >= cursorY) { point.y += GRID_SIZE; } }); });
-        
-        // --- 新しいデータで全体を置き換え ---
-        paperData = newPaperData;
-        boxes = newBoxes;
-        arrows = newArrows;
-        cursorPosition.x = 0;
-        cursorPosition.y = newY;
-        return true;
-    }
-    function mergeLineUp() {
-        if (cursorPosition.x !== 0 || cursorPosition.y === 0) return false;
-        const currentY = cursorPosition.y;
-        const prevY = currentY - GRID_SIZE;
-        let endOfPrevLineX = 0;
-        Object.keys(paperData).map(parsePosition).filter(p => p && p.y === prevY).forEach(p => { if (p.x >= endOfPrevLineX) { endOfPrevLineX = p.x + GRID_SIZE; } });
-        const newPaperData = {};
-        const newBoxes = [];
-        const newArrows = [];
-
-        // --- 文字データを再構築 ---
-        for (const key in paperData) {
-            const pos = parsePosition(key);
-            if (!pos) continue;
-            let newKey;
-            if (pos.y < currentY) {
-                newKey = key;
-            } else if (pos.y === currentY) {
-                newKey = positionToKey(pos.x + endOfPrevLineX, prevY);
-            } else { // pos.y > currentY
-                newKey = positionToKey(pos.x, pos.y - GRID_SIZE);
-            }
-            newPaperData[newKey] = paperData[key];
-        }
-
-        // --- boxesとarrowsを再構築 ---
-        boxes.forEach(box => {
-            if (box.y > currentY) {
-                newBoxes.push({ ...box, y: box.y - GRID_SIZE });
-            } else if (box.y < currentY) {
-                newBoxes.push({ ...box });
-            }
-        });
-        arrows.forEach(arrow => {
-            const newPath = arrow.path.map(point => ({
-                x: point.x,
-                y: point.y > currentY ? point.y - GRID_SIZE : point.y
-            })).filter(p => p.y !== currentY);
-            if (newPath.length > 1) {
-                newArrows.push({ ...arrow, path: newPath });
-            }
-        });
-        paperData = newPaperData;
-        boxes = newBoxes;
-        arrows = newArrows;
-        cursorPosition.x = endOfPrevLineX;
-        cursorPosition.y = prevY;
-        return true;
-    }
-      
-//ここから違う処理
-    function mergeLineUp() {
-        if (cursorPosition.x !== 0 || cursorPosition.y === 0) return false;
-        const currentY = cursorPosition.y;
-        const prevY = currentY - GRID_SIZE;
-        
-        // --- 1. 上の行の末尾のX座標を見つける ---
-        let endOfPrevLineX = 0;
-        Object.keys(paperData).map(parsePosition).filter(p => p && p.y === prevY).forEach(p => { if (p.x >= endOfPrevLineX) { endOfPrevLineX = p.x + GRID_SIZE; } });
-        
-        // --- 2. 現在の行の文字を、上の行の末尾に移動 ---
-        const charsToMove = Object.keys(paperData).map(parsePosition).filter(p => p && p.y === currentY).sort((a, b) => a.x - b.x);
-        for (const pos of charsToMove) {
-            const oldKey = positionToKey(pos.x, pos.y);
-            const newKey = positionToKey(endOfPrevLineX + pos.x, prevY);
-            paperData[newKey] = paperData[oldKey];
-            if (colorData && colorData[oldKey]) { colorData[newKey] = colorData[oldKey]; delete colorData[oldKey]; }
-            delete paperData[oldKey];
-        }
-        
-        // --- 3. 現在の行より下の全要素を1段上げる ---
-        const shiftStartY = currentY + GRID_SIZE;
-        const allKeysToShift = Object.keys(paperData).map(parsePosition).filter(p => p && p.y >= shiftStartY).sort((a, b) => a.y - a.y || a.x - a.x);
-        for (const pos of allKeysToShift) { const oldKey = positionToKey(pos.x, pos.y); const newKey = positionToKey(pos.x, pos.y - GRID_SIZE); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; }
-        if (typeof colorData !== 'undefined') { const allColorKeysToShift = Object.keys(colorData).map(parsePosition).filter(p => p && p.y >= shiftStartY).sort((a, b) => a.y - a.y || a.x - a.x); for (const pos of allColorKeysToShift) { const oldKey = positionToKey(pos.x, pos.y); const newKey = positionToKey(pos.x, pos.y - GRID_SIZE); colorData[newKey] = colorData[oldKey]; delete colorData[oldKey]; } }
-        boxes.forEach(box => { if (box.y >= shiftStartY) { box.y -= GRID_SIZE; } });
-        arrows.forEach(arrow => { arrow.path.forEach(point => { if (point.y >= shiftStartY) { point.y -= GRID_SIZE; } }); });
-
-        // --- 4. カーソル位置を更新 ---
-        cursorPosition.x = endOfPrevLineX;
-        cursorPosition.y = prevY;
-        return true;
-    }
-        // この関数をヘルパー関数群に追加
-    function insertNewLine() {
-        const insertY = cursorPosition.y + GRID_SIZE;
-
-        // --- paperDataを下にシフト ---
-        const paperKeysToShift = Object.keys(paperData)
-            .map(parsePosition)
-            .filter(p => p && p.y >= insertY)
-            .sort((a, b) => b.y - a.y || b.x - a.x); // 下の行から順に処理
-        for (const pos of paperKeysToShift) {
-            const oldKey = positionToKey(pos.x, pos.y);
-            const newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
-            paperData[newKey] = paperData[oldKey];
-            delete paperData[oldKey];
-        }
-
-        // --- colorDataを下にシフト（もしあれば） ---
-        if (typeof colorData !== 'undefined') {
-            const colorKeysToShift = Object.keys(colorData)
-                .map(parsePosition)
-                .filter(p => p && p.y >= insertY)
-                .sort((a, b) => b.y - a.y || b.x - a.x); 
-
-            for (const pos of colorKeysToShift) {
-                const oldKey = positionToKey(pos.x, pos.y);
-                const newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
-                colorData[newKey] = colorData[oldKey];
-                delete colorData[oldKey];
-            }
-        }
-
-        // --- boxesを下にシフト ---
-        boxes.forEach(box => {
-            if (box.y >= insertY) {
-                box.y += GRID_SIZE;
-            }
-        });
-
-        // --- arrowsを下にシフト ---
-        arrows.forEach(arrow => {
-            arrow.path.forEach(point => {
-                if (point.y >= insertY) {
-                    point.y += GRID_SIZE;
-                }
-            });
-        });
-
-        // カーソルを新しくできた行の先頭に移動
-        cursorPosition.x = 0;
-        cursorPosition.y = insertY;
-    }
+    
+    // 【★修正★】下線や太字のスタイルも適用するように修正
     function createCharCell(charObject, x, y, isComposingChar = false) {
         const charCell = document.createElement('div');
         charCell.className = 'char-cell';
-        if (isComposingChar) {
-            charCell.classList.add('composing-char');
-        }
-        const color = charObject.color;
-        if (color) {
-            charCell.classList.add(`text-${color}`);
-        }
-        const char = charObject.char;
+        if (isComposingChar) charCell.classList.add('composing-char');
+        if (charObject.color) charCell.classList.add(`text-${charObject.color}`);
+        if (charObject.bold) charCell.classList.add('text-bold');
+        if (charObject.underline) charCell.classList.add('text-underline');
+        
         charCell.style.left = `${x}px`;
         charCell.style.top = `${y}px`;
-        charCell.innerText = char === '\n' ? '' : char;
+        charCell.innerText = charObject.char === '\n' ? '' : charObject.char;
         container.appendChild(charCell);
     }
+
     function getSelectionRect() { if (!selectionStart) return null; const x1 = Math.min(selectionStart.x, cursorPosition.x); const y1 = Math.min(selectionStart.y, cursorPosition.y); const x2 = Math.max(selectionStart.x, cursorPosition.x); const y2 = Math.max(selectionStart.y, cursorPosition.y); return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE }; }
 
-    // 【★修正★】文字オブジェクトを作成して保存するように変更
+    // 【★修正★】文字オブジェクトのデフォルトプロパティを完全なものに
     function insertChar(char) {
         const currentKey = positionToKey(cursorPosition.x, cursorPosition.y);
         const currentY = cursorPosition.y;
@@ -243,39 +68,116 @@ document.addEventListener('DOMContentLoaded', () => {
             paperData[newKey] = paperData[oldKey];
             delete paperData[oldKey];
         });
-        paperData[currentKey] = { char: char, color: null }; // デフォルトは色なし
+        paperData[currentKey] = { char: char, color: null, bold: false, underline: false };
         moveCursor(GRID_SIZE, 0);
     }
     function deleteCharBackward() { if (cursorPosition.x === 0) return; moveCursor(-GRID_SIZE, 0); deleteCharForward(); }
     function deleteCharForward() { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); const currentY = cursorPosition.y; delete paperData[currentKey]; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x > cursorPosition.x).sort((a, b) => a.x - b.x); charsToShift.forEach(item => { const oldKey = positionToKey(item.x, item.y); const newKey = positionToKey(item.x - GRID_SIZE, item.y); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; }); }
+    
+    // 【★ここからが新しい行の挿入・結合のロジックです★】
+    function splitLine() {
+        const cursorX = cursorPosition.x;
+        const cursorY = cursorPosition.y;
+        const newY = cursorY + GRID_SIZE;
+
+        const newPaperData = {};
+        const newBoxes = [];
+        const newArrows = [];
+
+        for (const key in paperData) {
+            const pos = parsePosition(key);
+            if (!pos) continue;
+            let newKey;
+            if (pos.y < cursorY) {
+                newKey = key;
+            } else if (pos.y === cursorY) {
+                if (pos.x < cursorX) { newKey = key; } 
+                else { newKey = positionToKey(pos.x - cursorX, newY); }
+            } else { // pos.y > cursorY
+                newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
+            }
+            newPaperData[newKey] = paperData[key];
+        }
+        boxes.forEach(box => {
+            if (box.y > cursorY) { newBoxes.push({ ...box, y: box.y + GRID_SIZE }); }
+            else if (box.y === cursorY && box.x >= cursorX) { newBoxes.push({ ...box, y: newY, x: box.x - cursorX });}
+            else { newBoxes.push({ ...box }); }
+        });
+        arrows.forEach(arrow => {
+            const firstPoint = arrow.path[0];
+            if (firstPoint.y > cursorY || (firstPoint.y === cursorY && firstPoint.x >= cursorX)) {
+                const newPath = arrow.path.map(point => ({ x: point.x - cursorX, y: point.y + GRID_SIZE }));
+                newArrows.push({ ...arrow, path: newPath });
+            } else {
+                newArrows.push({ ...arrow });
+            }
+        });
+        paperData = newPaperData;
+        boxes = newBoxes;
+        arrows = newArrows;
+        cursorPosition.x = 0;
+        cursorPosition.y = newY;
+    }
+
+    function mergeLineUp() {
+        if (cursorPosition.x !== 0 || cursorPosition.y === 0) return;
+
+        const currentY = cursorPosition.y;
+        const prevY = currentY - GRID_SIZE;
+        let endOfPrevLineX = 0;
+        Object.keys(paperData).map(parsePosition).filter(p => p && p.y === prevY).forEach(p => { if (p.x >= endOfPrevLineX) { endOfPrevLineX = p.x + GRID_SIZE; } });
+        
+        const newPaperData = {};
+        const newBoxes = [];
+        const newArrows = [];
+
+        for (const key in paperData) {
+            const pos = parsePosition(key);
+            if (!pos) continue;
+            let newKey;
+            if (pos.y < currentY) {
+                newKey = key;
+            } else if (pos.y === currentY) {
+                newKey = positionToKey(pos.x + endOfPrevLineX, prevY);
+            } else {
+                newKey = positionToKey(pos.x, pos.y - GRID_SIZE);
+            }
+            newPaperData[newKey] = paperData[key];
+        }
+        boxes.forEach(box => {
+            if (box.y > currentY) { newBoxes.push({ ...box, y: box.y - GRID_SIZE }); } 
+            else if (box.y < currentY) { newBoxes.push({ ...box }); }
+        });
+        arrows.forEach(arrow => {
+            if(arrow.path.every(p => p.y !== currentY)) { // currentY にかからない矢印だけを処理
+                 const newPath = arrow.path.map(point => ({ x: point.x, y: point.y > currentY ? point.y - GRID_SIZE : point.y }));
+                 newArrows.push({ ...arrow, path: newPath });
+            }
+        });
+
+        paperData = newPaperData;
+        boxes = newBoxes;
+        arrows = newArrows;
+        cursorPosition.x = endOfPrevLineX;
+        cursorPosition.y = prevY;
+    }
+
     function updateCanvasSize() { const buffer = 300; let maxX = 0; let maxY = 0; const allPositions = [ ...Object.keys(paperData).map(parsePosition), ...boxes.flatMap(b => [{x: b.x + b.width, y: b.y + b.height}]), ...arrows.flatMap(a => a.path) ].filter(p => p); allPositions.forEach(p => { if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }); const newWidth = maxX + buffer; const newHeight = maxY + buffer; const minWidth = container.parentNode.clientWidth; const minHeight = container.parentNode.clientHeight; container.style.width = `${Math.max(minWidth, newWidth)}px`; container.style.height = `${Math.max(minHeight, newHeight)}px`; svgLayer.setAttribute('width', container.scrollWidth); svgLayer.setAttribute('height', container.scrollHeight); }
 
     /** メモ全体をリセットする関数 */
     function resetMemo() {
         if (confirm('すべてのメモ内容が消去され、元に戻せません。\n本当によろしいですか？')) {
-            paperData = {};
-            // colorDataは不要に
-            boxes = [];
-            arrows = [];
-            nextId = 0;
-            cursorPosition = { x: 0, y: 0 };
-            currentMode = 'normal';
-            selectionStart = null;
-            currentArrowPath = [];
+            paperData = {}; boxes = []; arrows = []; nextId = 0; cursorPosition = { x: 0, y: 0 }; currentMode = 'normal'; selectionStart = null; currentArrowPath = [];
             localStorage.removeItem(LOCAL_STORAGE_KEY);
             render();
             console.log("メモがリセットされました。");
-        } else {
-            console.log("リセットがキャンセルされました。");
         }
     }
-
+    
     /** PDF書き出し（印刷プレビュー）を呼び出す関数 */
     function exportToPdf() { window.print(); }
-    /** ヘルプモーダルを開く関数 */
     function openHelpModal() { currentMode = 'modal'; helpModal.classList.add('is-visible'); helpModal.setAttribute('aria-hidden', 'false'); }
-    /** ヘルプモーダルを閉じる関数 */
-    function closeHelpModal() { currentMode = 'normal'; helpModal.classList.remove('is-visible'); helpModal.setAttribute('aria-hidden', 'true'); hiddenInput.focus(); }
+    function closeHelpModal() { currentMode = 'normal'; helpModal.classList.remove('is-visible'); helpModal.setAttribute('aria-hidden', 'true'); hiddenInput.focus({preventScroll:true}); }
             
     /** メイン描画関数 */
     function render() {
@@ -283,21 +185,10 @@ document.addEventListener('DOMContentLoaded', () => {
         elementsToRemove.forEach(el => el.remove());
         svgLayer.innerHTML = '';
         svgLayer.appendChild(createArrowMarker());
-        const drawArrowPath = (path, isPreview = false) => {
-            if (path.length < 2) return;
-            const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-            const points = path.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' ');
-            polyline.setAttribute('points', points);
-            polyline.setAttribute('class', 'arrow-line');
-            polyline.setAttribute('fill', 'none');
-            if (isPreview) { polyline.style.opacity = '0.5'; } else { polyline.setAttribute('marker-end', 'url(#arrowhead)'); }
-            svgLayer.appendChild(polyline);
-        };
+        const drawArrowPath = (path, isPreview = false) => { if (path.length < 2) return; const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline'); const points = path.map(p => `${p.x + GRID_SIZE / 2},${p.y + GRID_SIZE / 2}`).join(' '); polyline.setAttribute('points', points); polyline.setAttribute('class', 'arrow-line'); polyline.setAttribute('fill', 'none'); if (isPreview) { polyline.style.opacity = '0.5'; } else { polyline.setAttribute('marker-end', 'url(#arrowhead)'); } svgLayer.appendChild(polyline); };
         arrows.forEach(arrow => drawArrowPath(arrow.path));
         if (currentMode === 'arrow') drawArrowPath(currentArrowPath, true);
         boxes.forEach(box => { const boxEl = document.createElement('div'); boxEl.classList.add('border-box'); boxEl.style.left = `${box.x}px`; boxEl.style.top = `${box.y}px`; boxEl.style.width = `${box.width}px`; boxEl.style.height = `${box.height}px`; container.appendChild(boxEl); });
-
-        // 【★修正★】paperData[key]がオブジェクトであることを前提にcreateCharCellを呼ぶ
         Object.keys(paperData).forEach(key => { const pos = parsePosition(key); if (pos) createCharCell(paperData[key], pos.x, pos.y); });
         if (currentMode === 'visual' && selectionStart) { const rect = getSelectionRect(); if (rect) { const highlightEl = document.createElement('div'); highlightEl.classList.add('selection-highlight'); highlightEl.style.left = `${rect.x}px`; highlightEl.style.top = `${rect.y}px`; highlightEl.style.width = `${rect.width}px`; highlightEl.style.height = `${rect.height}px`; container.appendChild(highlightEl); } }
         if (isComposing && compositionText) { let tempX = cursorPosition.x; for (const char of compositionText) { createCharCell({ char: char, color: null }, tempX, cursorPosition.y, true); tempX += GRID_SIZE; } }
@@ -312,8 +203,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- データ保存・読み込み関連 ---
-
-    // 【★修正★】colorDataを削除
     function serializeState() { return JSON.stringify({ paperData, boxes, arrows, nextId }); }
     function deserializeState(jsonString) { 
         try { 
@@ -323,16 +212,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 boxes = state.boxes; 
                 arrows = state.arrows; 
                 nextId = state.nextId || 0;
-
-                // 【★追加★】古いデータ形式との互換性を保つための処理
+                // 古いデータ形式との互換性処理
                 for (const key in paperData) {
                     if (typeof paperData[key] === 'string') {
                         const char = paperData[key];
                         paperData[key] = { char: char, color: null };
-                        // 昔のcolorDataも存在すれば、そこから色情報を復元する
-                        if (state.colorData && state.colorData[key]) {
-                            paperData[key].color = state.colorData[key];
-                        }
                     }
                 }
                 return true; 
@@ -345,104 +229,91 @@ document.addEventListener('DOMContentLoaded', () => {
     function importFromFile() { const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json'; input.onchange = (event) => { const file = event.target.files[0]; if (!file) return; if (!confirm('現在の内容は上書きされます。よろしいですか？')) return; const reader = new FileReader(); reader.onload = (e) => { if (deserializeState(e.target.result)) { render(); } }; reader.readAsText(file); }; input.click(); }
 
     // --- キーボードイベントハンドラ ---
-    // handleNormalModeKeys 関数を丸ごと置き換え
-// handleNormalModeKeys 関数を丸ごと置き換え
-function handleNormalModeKeys(e) {
-    if ((e.key === 'e' || e.key === 'l') && (e.ctrlKey || e.metaKey)) {
+    function handleNormalModeKeys(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'l')) {
+            e.preventDefault();
+            const scrollX = window.scrollX;
+            const scrollY = window.scrollY;
+            if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; } 
+            else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; }
+            render();
+            window.scrollTo(scrollX, scrollY);
+        } else {
+            const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
+            if (controlKeys.includes(e.key)) {
+                e.preventDefault();
+                switch (e.key) {
+                    case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
+                    case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
+                    case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
+                    case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
+                    case 'Enter':
+                        splitLine();
+                        break;
+                    case 'Backspace':
+                        if (cursorPosition.x === 0 && cursorPosition.y > 0) {
+                            mergeLineUp();
+                        } else {
+                            deleteCharBackward();
+                        }
+                        break;
+                    case 'Delete':
+                        deleteCharForward();
+                        break;
+                }
+                render();
+                saveToLocalStorage();
+            }
+        }
+    }
+
+    function handleVisualModeKeys(e) {
         e.preventDefault();
         const scrollX = window.scrollX;
         const scrollY = window.scrollY;
-        if (e.key === 'e') { currentMode = 'visual'; selectionStart = { ...cursorPosition }; } 
-        else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; }
-        render();
-        window.scrollTo(scrollX, scrollY);
-    } else {
-        const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
-        if (controlKeys.includes(e.key)) {
-            e.preventDefault();
-            let stateChanged = false; // 状態変更があったかどうかのフラグ
+        const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
+        const returnToNormal = () => { currentMode = 'normal'; selectionStart = null; saveToLocalStorage(); };
+
+        if (e.key === 'Escape') { returnToNormal(); } 
+        else if (e.key === 'Enter') {
+            const rect = getSelectionRect();
+            if (rect) { boxes.push({ id: `box${nextId++}`, ...rect }); }
+            returnToNormal();
+        } else if (colorKeys[e.code] || e.code === 'KeyD') {
+            const rect = getSelectionRect();
+            if (rect) {
+                for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
+                    for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
+                        const key = positionToKey(x, y);
+                        if (paperData[key]) {
+                            if (e.code === 'KeyD') { paperData[key].color = null; } 
+                            else { paperData[key].color = colorKeys[e.code]; }
+                        }
+                    }
+                }
+            }
+            returnToNormal();
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+            const rect = getSelectionRect();
+            if (rect) {
+                boxes = boxes.filter(box => !(box.x >= rect.x && box.y >= rect.y && (box.x + box.width) <= (rect.x + rect.width) && (box.y + box.height) <= (rect.y + rect.height)));
+                arrows = arrows.filter(arrow => !arrow.path.some(p => p.x >= rect.x && p.x < rect.x + rect.width && p.y >= rect.y && p.y < rect.y + rect.height));
+            }
+            returnToNormal();
+        } else if (ARROW_DIRECTIONS[e.key]) { 
             switch (e.key) {
                 case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
                 case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
                 case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
                 case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-                case 'Enter':
-                    stateChanged = splitLine();
-                    break;
-                case 'Backspace':
-                    // 行頭なら上の行と結合、そうでなければ一文字削除
-                    if (cursorPosition.x === 0 && cursorPosition.y > 0) {
-                        stateChanged = mergeLineUp();
-                    } else {
-                        stateChanged = deleteCharBackward();
-                    }
-                    break;
-                case 'Delete':
-                    stateChanged = deleteCharForward();
-                    break;
             }
+        }
+        render();
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
+            window.scrollTo(scrollX, scrollY);
+        }
+    }
 
-            render();
-            // データが変更された場合のみ保存
-            if (stateChanged) {
-                saveToLocalStorage();
-            }
-        }
-    }
-}
-
-// handleVisualModeKeys 関数を丸ごと置き換え
-function handleVisualModeKeys(e) {
-    e.preventDefault();
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-    const colorKeys = { 'KeyR': 'red', 'KeyG': 'green', 'KeyB': 'blue' };
-    const returnToNormal = () => { currentMode = 'normal'; selectionStart = null; saveToLocalStorage(); };
-    if (e.key === 'Escape') { 
-        returnToNormal();
-    } else if (e.key === 'Enter') {
-        const rect = getSelectionRect();
-        if (rect) { boxes.push({ id: `box${nextId++}`, ...rect }); }
-        returnToNormal();
-    } else if (colorKeys[e.code] || e.code === 'KeyD') {
-        const rect = getSelectionRect();
-        if (rect) {
-            for (let y = rect.y; y < rect.y + rect.height; y += GRID_SIZE) {
-                for (let x = rect.x; x < rect.x + rect.width; x += GRID_SIZE) {
-                    const key = positionToKey(x, y);
-                    if (paperData[key]) {
-                        if (e.code === 'KeyD') {
-                            paperData[key].color = null;
-                        } else {
-                            paperData[key].color = colorKeys[e.code];
-                        }
-                    }
-                }
-            }
-        }
-        returnToNormal();
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        const rect = getSelectionRect();
-        if (rect) {
-            boxes = boxes.filter(box => !(box.x >= rect.x && box.y >= rect.y && (box.x + box.width) <= (rect.x + rect.width) && (box.y + box.height) <= (rect.y + rect.height)));
-            arrows = arrows.filter(arrow => !arrow.path.some(p => p.x >= rect.x && p.x < rect.x + rect.width && p.y >= rect.y && p.y < rect.y + rect.height));
-        }
-        returnToNormal();
-    } else if (ARROW_DIRECTIONS[e.key]) { 
-        switch (e.key) {
-            case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
-            case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
-            case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
-            case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-        }
-    }
-    render();
-    // ★追加：記憶した位置にスクロールを強制的に戻す
-    // ただし、矢印キーで範囲選択している最中はスクロールを戻さない
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
-        window.scrollTo(scrollX, scrollY);
-    }
-}
     function handleArrowModeKeys(e) {
         e.preventDefault();
         const lastPoint = currentArrowPath[currentArrowPath.length - 1];
@@ -473,6 +344,7 @@ function handleVisualModeKeys(e) {
         }
         render();
     }
+    
     function handleTextInput(text) {
         if (currentMode !== 'normal') return; 
         if (text) {
@@ -496,7 +368,6 @@ function handleVisualModeKeys(e) {
         }
     });
 
-    // テキスト入力関連のイベントは hiddenInput で処理
     hiddenInput.addEventListener('keydown', (e) => {
         if (isComposing || currentMode !== 'normal') return;
         handleNormalModeKeys(e);
@@ -506,16 +377,11 @@ function handleVisualModeKeys(e) {
     hiddenInput.addEventListener('compositionend', (e) => { isComposing = false; compositionText = ''; handleTextInput(e.data || ''); e.target.value = ''; });
     hiddenInput.addEventListener('input', (e) => { if (isComposing) return; handleTextInput(e.target.value); e.target.value = ''; });
 
-    // コマンド系のイベントは container で処理
     container.addEventListener('keydown', (e) => {
-        if (currentMode === 'visual') {
-            handleVisualModeKeys(e);
-        } else if (currentMode === 'arrow') {
-            handleArrowModeKeys(e);
-        }
+        if (currentMode === 'visual') { handleVisualModeKeys(e); } 
+        else if (currentMode === 'arrow') { handleArrowModeKeys(e); }
     });
 
-    // クリックイベント
     container.addEventListener('click', (event) => { 
         const rect = container.getBoundingClientRect(); 
         const x = event.clientX - rect.left + container.scrollLeft; 
@@ -529,6 +395,7 @@ function handleVisualModeKeys(e) {
         }
         render(); 
     });
+    
     closeHelpModalBtn.addEventListener('click', closeHelpModal);
     helpModal.addEventListener('click', (e) => {
         if (e.target === helpModal) { closeHelpModal(); }
