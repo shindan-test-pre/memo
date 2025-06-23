@@ -75,6 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function deleteCharForward() { const currentKey = positionToKey(cursorPosition.x, cursorPosition.y); const currentY = cursorPosition.y; delete paperData[currentKey]; const charsToShift = Object.keys(paperData).map(key => parsePosition(key)).filter(item => item && item.y === currentY && item.x > cursorPosition.x).sort((a, b) => a.x - b.x); charsToShift.forEach(item => { const oldKey = positionToKey(item.x, item.y); const newKey = positionToKey(item.x - GRID_SIZE, item.y); paperData[newKey] = paperData[oldKey]; delete paperData[oldKey]; }); }
     
     // 【★ここからが新しい行の挿入・結合のロジックです★】
+    // splitLine と mergeLineUp の2つの関数を、以下の新しいコードに置き換えてください
+
     function splitLine() {
         const cursorX = cursorPosition.x;
         const cursorY = cursorPosition.y;
@@ -84,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newBoxes = [];
         const newArrows = [];
 
+        // --- 文字データを再構築 ---
         for (const key in paperData) {
             const pos = parsePosition(key);
             if (!pos) continue;
@@ -91,39 +94,57 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pos.y < cursorY) {
                 newKey = key;
             } else if (pos.y === cursorY) {
-                if (pos.x < cursorX) { newKey = key; } 
-                else { newKey = positionToKey(pos.x - cursorX, newY); }
-            } else { // pos.y > cursorY
+                if (pos.x < cursorX) {
+                    newKey = key;
+                } else {
+                    newKey = positionToKey(pos.x - cursorX, newY);
+                }
+            } else {
                 newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
             }
             newPaperData[newKey] = paperData[key];
         }
+
+        // --- boxesを再構築 ---
         boxes.forEach(box => {
-            if (box.y > cursorY) { newBoxes.push({ ...box, y: box.y + GRID_SIZE }); }
-            else if (box.y === cursorY && box.x >= cursorX) { newBoxes.push({ ...box, y: newY, x: box.x - cursorX });}
-            else { newBoxes.push({ ...box }); }
+            if (box.y > cursorY) {
+                newBoxes.push({ ...box, y: box.y + GRID_SIZE });
+            } else {
+                newBoxes.push({ ...box });
+            }
         });
+
+        // --- arrowsを再構築 【★バグ修正★】---
         arrows.forEach(arrow => {
-            const firstPoint = arrow.path[0];
-            if (firstPoint.y > cursorY || (firstPoint.y === cursorY && firstPoint.x >= cursorX)) {
-                const newPath = arrow.path.map(point => ({ x: point.x - cursorX, y: point.y + GRID_SIZE }));
+            // 矢印の最も上のY座標を基準にする
+            const topMostY = Math.min(...arrow.path.map(p => p.y));
+            if (topMostY > cursorY) {
+                // 矢印全体がカーソル行より下なら、全体をシフト
+                const newPath = arrow.path.map(point => ({ x: point.x, y: point.y + GRID_SIZE }));
                 newArrows.push({ ...arrow, path: newPath });
             } else {
+                // そうでなければ、矢印はそのままの位置
                 newArrows.push({ ...arrow });
             }
         });
+
+        // --- 新しいデータで全体を置き換え ---
         paperData = newPaperData;
         boxes = newBoxes;
         arrows = newArrows;
+        
+        // カーソル位置を更新
         cursorPosition.x = 0;
         cursorPosition.y = newY;
+        return true;
     }
 
     function mergeLineUp() {
-        if (cursorPosition.x !== 0 || cursorPosition.y === 0) return;
+        if (cursorPosition.x !== 0 || cursorPosition.y === 0) return false;
 
         const currentY = cursorPosition.y;
         const prevY = currentY - GRID_SIZE;
+        
         let endOfPrevLineX = 0;
         Object.keys(paperData).map(parsePosition).filter(p => p && p.y === prevY).forEach(p => { if (p.x >= endOfPrevLineX) { endOfPrevLineX = p.x + GRID_SIZE; } });
         
@@ -131,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newBoxes = [];
         const newArrows = [];
 
+        // --- 文字データを再構築 ---
         for (const key in paperData) {
             const pos = parsePosition(key);
             if (!pos) continue;
@@ -144,15 +166,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             newPaperData[newKey] = paperData[key];
         }
+
+        // --- boxesとarrowsを再構築 ---
         boxes.forEach(box => {
-            if (box.y > currentY) { newBoxes.push({ ...box, y: box.y - GRID_SIZE }); } 
-            else if (box.y < currentY) { newBoxes.push({ ...box }); }
+            if (box.y > currentY) {
+                newBoxes.push({ ...box, y: box.y - GRID_SIZE });
+            } else if (box.y < currentY) {
+                newBoxes.push({ ...box });
+            }
         });
         arrows.forEach(arrow => {
-            if(arrow.path.every(p => p.y !== currentY)) { // currentY にかからない矢印だけを処理
-                 const newPath = arrow.path.map(point => ({ x: point.x, y: point.y > currentY ? point.y - GRID_SIZE : point.y }));
-                 newArrows.push({ ...arrow, path: newPath });
+            const topMostY = Math.min(...arrow.path.map(p => p.y));
+            if (topMostY > currentY) {
+                const newPath = arrow.path.map(point => ({ x: point.x, y: point.y - GRID_SIZE }));
+                newArrows.push({ ...arrow, path: newPath });
+            } else if (topMostY < currentY) {
+                newArrows.push({ ...arrow });
             }
+            // currentY上にある矢印は、行結合で削除される
         });
 
         paperData = newPaperData;
@@ -160,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
         arrows = newArrows;
         cursorPosition.x = endOfPrevLineX;
         cursorPosition.y = prevY;
+        return true;
     }
 
     function updateCanvasSize() { const buffer = 300; let maxX = 0; let maxY = 0; const allPositions = [ ...Object.keys(paperData).map(parsePosition), ...boxes.flatMap(b => [{x: b.x + b.width, y: b.y + b.height}]), ...arrows.flatMap(a => a.path) ].filter(p => p); allPositions.forEach(p => { if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }); const newWidth = maxX + buffer; const newHeight = maxY + buffer; const minWidth = container.parentNode.clientWidth; const minHeight = container.parentNode.clientHeight; container.style.width = `${Math.max(minWidth, newWidth)}px`; container.style.height = `${Math.max(minHeight, newHeight)}px`; svgLayer.setAttribute('width', container.scrollWidth); svgLayer.setAttribute('height', container.scrollHeight); }
