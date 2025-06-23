@@ -43,90 +43,49 @@ document.addEventListener('DOMContentLoaded', () => {
     // splitLine と mergeLineUp の2つの関数を、以下の新しいコードに丸ごと置き換えてください
     // script.js の中にある splitLine 関数を、以下の内容に丸ごと置き換えてください
 
+ // splitLine と mergeLineUp の2つの関数を、以下のコードに置き換えてください
+
     function splitLine() {
         const cursorX = cursorPosition.x;
         const cursorY = cursorPosition.y;
         const newY = cursorY + GRID_SIZE;
 
         const newPaperData = {};
-        const newColorData = {};
-        const newBoxes = [];
-        const newArrows = [];
+        const newBoxes = [...boxes]; // boxesとarrowsはコピーから始める
+        const newArrows = JSON.parse(JSON.stringify(arrows));
 
-        // --- 1. paperData と colorData を再構築 ---
+        // --- 文字データを再構築 ---
         for (const key in paperData) {
             const pos = parsePosition(key);
             if (!pos) continue;
 
             let newKey;
-            // case 1: カーソル行より上の行 -> そのままコピー
             if (pos.y < cursorY) {
                 newKey = key;
-            } 
-            // case 2: カーソルと同じ行
-            else if (pos.y === cursorY) {
+            } else if (pos.y === cursorY) {
                 if (pos.x < cursorX) {
-                    // カーソルより前 -> そのままコピー
                     newKey = key;
                 } else {
-                    // カーソル以降 -> 下の行の先頭に移動
                     newKey = positionToKey(pos.x - cursorX, newY);
                 }
-            } 
-            // case 3: カーソル行より下の行 -> 1段下にシフト
-            else { // pos.y > cursorY
+            } else { // pos.y > cursorY
                 newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
             }
-            
             newPaperData[newKey] = paperData[key];
-            if (colorData && colorData[key]) {
-                newColorData[newKey] = colorData[key];
-            }
         }
 
-        // --- 2. boxes と arrows を再構築 ---
-        // (カーソル行より上にあるものはそのまま、カーソル行かそれより下にあるものは全て1段下にシフト)
-        boxes.forEach(box => {
-            if (box.y >= cursorY) {
-                newBoxes.push({ ...box, y: box.y + GRID_SIZE });
-            } else {
-                newBoxes.push({ ...box });
-            }
-        });
-        arrows.forEach(arrow => {
-            const newPath = arrow.path.map(point => {
-                if (point.y >= cursorY) {
-                    return { x: point.x, y: point.y + GRID_SIZE };
-                }
-                return { ...point };
-            });
-            newArrows.push({ ...arrow, path: newPath });
-        });
-
-        // --- 3. 新しいデータで全体を置き換え ---
+        // --- boxesとarrowsをシフト ---
+        newBoxes.forEach(box => { if (box.y >= cursorY) { box.y += GRID_SIZE; } });
+        newArrows.forEach(arrow => { arrow.path.forEach(point => { if (point.y >= cursorY) { point.y += GRID_SIZE; } }); });
+        
+        // --- 新しいデータで全体を置き換え ---
         paperData = newPaperData;
-        colorData = newColorData;
         boxes = newBoxes;
         arrows = newArrows;
         
-        // --- 4. カーソル位置を更新 ---
         cursorPosition.x = 0;
         cursorPosition.y = newY;
-        return true; // 状態が変更されたことを示す
-    }
-
-        // --- boxesとarrowsをシフト ---
-        boxes.forEach(box => { if (box.y > cursorY) { box.y += GRID_SIZE; } });
-        arrows.forEach(arrow => { arrow.path.forEach(point => { if (point.y > cursorY) { point.y += GRID_SIZE; } }); });
-
-        // --- 新しいデータで全体を置き換え ---
-        paperData = newPaperData;
-        colorData = newColorData;
-        
-        // カーソル位置を更新
-        cursorPosition.x = 0;
-        cursorPosition.y = newY;
-        return true; // 状態が変更されたことを示す
+        return true;
     }
 
     function mergeLineUp() {
@@ -135,56 +94,57 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentY = cursorPosition.y;
         const prevY = currentY - GRID_SIZE;
         
-        // --- 1. 結合先（上の行）の末尾のX座標を計算 ---
         let endOfPrevLineX = 0;
         Object.keys(paperData).map(parsePosition).filter(p => p && p.y === prevY).forEach(p => { if (p.x >= endOfPrevLineX) { endOfPrevLineX = p.x + GRID_SIZE; } });
         
         const newPaperData = {};
-        const newColorData = {};
+        const newBoxes = [];
+        const newArrows = [];
 
-        // --- paperDataとcolorDataを再構築 ---
+        // --- 文字データを再構築 ---
         for (const key in paperData) {
             const pos = parsePosition(key);
             if (!pos) continue;
 
             let newKey;
-            // 1. 結合先の行より上：そのままコピー
-            if (pos.y < prevY) {
+            if (pos.y < currentY) {
                 newKey = key;
-            } 
-            // 2. 結合先の行：そのままコピー
-            else if (pos.y === prevY) {
-                newKey = key;
-            }
-            // 3. 結合される行（現在の行）：上の行の末尾に移動
-            else if (pos.y === currentY) {
+            } else if (pos.y === currentY) {
                 newKey = positionToKey(pos.x + endOfPrevLineX, prevY);
-            }
-            // 4. それより下の行：1段上にシフト
-            else { // pos.y > currentY
+            } else { // pos.y > currentY
                 newKey = positionToKey(pos.x, pos.y - GRID_SIZE);
             }
-            
             newPaperData[newKey] = paperData[key];
-            if (colorData && colorData[key]) {
-                newColorData[newKey] = colorData[key];
-            }
         }
 
-        // --- boxesとarrowsをシフト ---
-        boxes.forEach(box => { if (box.y > currentY) { box.y -= GRID_SIZE; } });
-        arrows.forEach(arrow => { arrow.path.forEach(point => { if (point.y > currentY) { point.y -= GRID_SIZE; } }); });
-        
-        // --- 新しいデータで全体を置き換え ---
-        paperData = newPaperData;
-        colorData = newColorData;
+        // --- boxesとarrowsを再構築 ---
+        boxes.forEach(box => {
+            if (box.y > currentY) {
+                newBoxes.push({ ...box, y: box.y - GRID_SIZE });
+            } else if (box.y < currentY) {
+                newBoxes.push({ ...box });
+            }
+        });
+        arrows.forEach(arrow => {
+            const newPath = arrow.path.map(point => ({
+                x: point.x,
+                y: point.y > currentY ? point.y - GRID_SIZE : point.y
+            })).filter(p => p.y !== currentY);
+            
+            if (newPath.length > 1) {
+                newArrows.push({ ...arrow, path: newPath });
+            }
+        });
 
-        // カーソル位置を更新
+        paperData = newPaperData;
+        boxes = newBoxes;
+        arrows = newArrows;
+
         cursorPosition.x = endOfPrevLineX;
         cursorPosition.y = prevY;
         return true;
     }
-
+      
 //ここから違う処理
     function mergeLineUp() {
         if (cursorPosition.x !== 0 || cursorPosition.y === 0) return false;
@@ -404,9 +364,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- キーボードイベントハンドラ ---
     // handleNormalModeKeys 関数を丸ごと置き換え
+// handleNormalModeKeys 関数を丸ごと置き換え
 function handleNormalModeKeys(e) {
-    let stateChanged = false;
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'l')) {
+    if ((e.key === 'e' || e.key === 'l') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         const scrollX = window.scrollX;
         const scrollY = window.scrollY;
@@ -414,32 +374,37 @@ function handleNormalModeKeys(e) {
         else if (e.key === 'l') { currentMode = 'arrow'; currentArrowPath = [{...cursorPosition}]; }
         render();
         window.scrollTo(scrollX, scrollY);
-        return; // この関数の処理を終了
-    }
-    const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
-    if (controlKeys.includes(e.key)) {
-        e.preventDefault();
-        switch (e.key) {
-            case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
-            case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
-            case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
-            case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
-            case 'Enter':
-                stateChanged = splitLine();
-                break;
-            case 'Backspace':
-                stateChanged = mergeLineUp();
-                if (!stateChanged) { // mergeLineUpが実行されなかった場合（行頭でないなど）
-                    stateChanged = deleteCharBackward();
-                }
-                break;
-            case 'Delete':
-                stateChanged = deleteCharForward();
-                break;
-        }
-        render();
-        if (stateChanged) {
-            saveToLocalStorage();
+    } else {
+        const controlKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace', 'Delete', 'Enter'];
+        if (controlKeys.includes(e.key)) {
+            e.preventDefault();
+            let stateChanged = false; // 状態変更があったかどうかのフラグ
+            switch (e.key) {
+                case 'ArrowUp': moveCursor(0, -GRID_SIZE); break;
+                case 'ArrowDown': moveCursor(0, GRID_SIZE); break;
+                case 'ArrowLeft': moveCursor(-GRID_SIZE, 0); break;
+                case 'ArrowRight': moveCursor(GRID_SIZE, 0); break;
+                case 'Enter':
+                    stateChanged = splitLine();
+                    break;
+                case 'Backspace':
+                    // 行頭なら上の行と結合、そうでなければ一文字削除
+                    if (cursorPosition.x === 0 && cursorPosition.y > 0) {
+                        stateChanged = mergeLineUp();
+                    } else {
+                        stateChanged = deleteCharBackward();
+                    }
+                    break;
+                case 'Delete':
+                    stateChanged = deleteCharForward();
+                    break;
+            }
+
+            render();
+            // データが変更された場合のみ保存
+            if (stateChanged) {
+                saveToLocalStorage();
+            }
         }
     }
 }
