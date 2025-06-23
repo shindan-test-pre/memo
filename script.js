@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function createArrowMarker() { const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker'); marker.id = 'arrowhead'; marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5'); marker.setAttribute('markerWidth', '5'); marker.setAttribute('markerHeight', '5'); marker.setAttribute('orient', 'auto-start-reverse'); const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); pathEl.setAttribute('fill', '#333'); marker.appendChild(pathEl); defs.appendChild(marker); return defs; }
     // script.js のヘルパー関数群のセクションに追加
     // splitLine と mergeLineUp の2つの関数を、以下の新しいコードに丸ごと置き換えてください
+    // script.js の中にある splitLine 関数を、以下の内容に丸ごと置き換えてください
 
     function splitLine() {
         const cursorX = cursorPosition.x;
@@ -48,29 +49,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const newY = cursorY + GRID_SIZE;
 
         const newPaperData = {};
-        const newColorData = {}; // colorDataも同様に作り直す
-        
-        // --- paperDataとcolorDataを再構築 ---
+        const newColorData = {};
+        const newBoxes = [];
+        const newArrows = [];
+
+        // --- 1. paperData と colorData を再構築 ---
         for (const key in paperData) {
             const pos = parsePosition(key);
             if (!pos) continue;
 
             let newKey;
-            // 1. カーソル行より上の行：そのままコピー
+            // case 1: カーソル行より上の行 -> そのままコピー
             if (pos.y < cursorY) {
                 newKey = key;
             } 
-            // 2. カーソルと同じ行
+            // case 2: カーソルと同じ行
             else if (pos.y === cursorY) {
                 if (pos.x < cursorX) {
-                    // カーソルより前：そのままコピー
+                    // カーソルより前 -> そのままコピー
                     newKey = key;
                 } else {
-                    // カーソル以降：下の行の先頭に移動
+                    // カーソル以降 -> 下の行の先頭に移動
                     newKey = positionToKey(pos.x - cursorX, newY);
                 }
             } 
-            // 3. カーソル行より下の行：1段下にシフト
+            // case 3: カーソル行より下の行 -> 1段下にシフト
             else { // pos.y > cursorY
                 newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
             }
@@ -80,6 +83,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 newColorData[newKey] = colorData[key];
             }
         }
+
+        // --- 2. boxes と arrows を再構築 ---
+        // (カーソル行より上にあるものはそのまま、カーソル行かそれより下にあるものは全て1段下にシフト)
+        boxes.forEach(box => {
+            if (box.y >= cursorY) {
+                newBoxes.push({ ...box, y: box.y + GRID_SIZE });
+            } else {
+                newBoxes.push({ ...box });
+            }
+        });
+        arrows.forEach(arrow => {
+            const newPath = arrow.path.map(point => {
+                if (point.y >= cursorY) {
+                    return { x: point.x, y: point.y + GRID_SIZE };
+                }
+                return { ...point };
+            });
+            newArrows.push({ ...arrow, path: newPath });
+        });
+
+        // --- 3. 新しいデータで全体を置き換え ---
+        paperData = newPaperData;
+        colorData = newColorData;
+        boxes = newBoxes;
+        arrows = newArrows;
+        
+        // --- 4. カーソル位置を更新 ---
+        cursorPosition.x = 0;
+        cursorPosition.y = newY;
+        return true; // 状態が変更されたことを示す
+    }
 
         // --- boxesとarrowsをシフト ---
         boxes.forEach(box => { if (box.y > cursorY) { box.y += GRID_SIZE; } });
