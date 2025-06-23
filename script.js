@@ -107,20 +107,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- boxesとarrowsを再構築 ---
         boxes.forEach(box => {
-            if (box.y > currentY) {
-                newBoxes.push({ ...box, y: box.y - GRID_SIZE });
-            } else if (box.y < currentY) {
+            // 【★修正★】カーソル行よりも下(>)にあるものだけをシフトする
+            if (box.y > cursorY) {
+                newBoxes.push({ ...box, y: box.y + GRID_SIZE });
+            } else {
                 newBoxes.push({ ...box });
             }
         });
         arrows.forEach(arrow => {
-            const newPath = arrow.path.map(point => ({
-                x: point.x,
-                y: point.y > currentY ? point.y - GRID_SIZE : point.y
-            })).filter(p => p.y !== currentY);
-            if (newPath.length > 1) {
-                newArrows.push({ ...arrow, path: newPath });
-            }
+            const newPath = arrow.path.map(point => {
+                // 【★修正★】カーソル行よりも下(>)にある点だけをシフトする
+                if (point.y > cursorY) {
+                    return { x: point.x, y: point.y + GRID_SIZE };
+                }
+                return { ...point };
+            });
+            newArrows.push({ ...arrow, path: newPath });
         });
         paperData = newPaperData;
         boxes = newBoxes;
