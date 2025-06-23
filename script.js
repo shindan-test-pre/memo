@@ -40,16 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function moveCursor(dx, dy) { cursorPosition.x = Math.max(0, cursorPosition.x + dx); cursorPosition.y = Math.max(0, cursorPosition.y + dy); }
     function createArrowMarker() { const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker'); marker.id = 'arrowhead'; marker.setAttribute('viewBox', '0 0 10 10'); marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5'); marker.setAttribute('markerWidth', '5'); marker.setAttribute('markerHeight', '5'); marker.setAttribute('orient', 'auto-start-reverse'); const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path'); pathEl.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); pathEl.setAttribute('fill', '#333'); marker.appendChild(pathEl); defs.appendChild(marker); return defs; }
     // script.js のヘルパー関数群のセクションに追加
-    // splitLine と mergeLineUp の2つの関数を、以下の新しいコードに丸ごと置き換えてください
-    // script.js の中にある splitLine 関数を、以下の内容に丸ごと置き換えてください
-
- // splitLine と mergeLineUp の2つの関数を、以下のコードに置き換えてください
-
+     // splitLine と mergeLineUp の2つの関数を、以下のコードに置き換えてください
     function splitLine() {
         const cursorX = cursorPosition.x;
         const cursorY = cursorPosition.y;
         const newY = cursorY + GRID_SIZE;
-
         const newPaperData = {};
         const newBoxes = [...boxes]; // boxesとarrowsはコピーから始める
         const newArrows = JSON.parse(JSON.stringify(arrows));
@@ -58,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const key in paperData) {
             const pos = parsePosition(key);
             if (!pos) continue;
-
             let newKey;
             if (pos.y < cursorY) {
                 newKey = key;
@@ -82,21 +76,16 @@ document.addEventListener('DOMContentLoaded', () => {
         paperData = newPaperData;
         boxes = newBoxes;
         arrows = newArrows;
-        
         cursorPosition.x = 0;
         cursorPosition.y = newY;
         return true;
     }
-
     function mergeLineUp() {
         if (cursorPosition.x !== 0 || cursorPosition.y === 0) return false;
-
         const currentY = cursorPosition.y;
         const prevY = currentY - GRID_SIZE;
-        
         let endOfPrevLineX = 0;
         Object.keys(paperData).map(parsePosition).filter(p => p && p.y === prevY).forEach(p => { if (p.x >= endOfPrevLineX) { endOfPrevLineX = p.x + GRID_SIZE; } });
-        
         const newPaperData = {};
         const newBoxes = [];
         const newArrows = [];
@@ -105,7 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const key in paperData) {
             const pos = parsePosition(key);
             if (!pos) continue;
-
             let newKey;
             if (pos.y < currentY) {
                 newKey = key;
@@ -130,16 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 x: point.x,
                 y: point.y > currentY ? point.y - GRID_SIZE : point.y
             })).filter(p => p.y !== currentY);
-            
             if (newPath.length > 1) {
                 newArrows.push({ ...arrow, path: newPath });
             }
         });
-
         paperData = newPaperData;
         boxes = newBoxes;
         arrows = newArrows;
-
         cursorPosition.x = endOfPrevLineX;
         cursorPosition.y = prevY;
         return true;
@@ -148,7 +133,6 @@ document.addEventListener('DOMContentLoaded', () => {
 //ここから違う処理
     function mergeLineUp() {
         if (cursorPosition.x !== 0 || cursorPosition.y === 0) return false;
-
         const currentY = cursorPosition.y;
         const prevY = currentY - GRID_SIZE;
         
@@ -179,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cursorPosition.y = prevY;
         return true;
     }
-            // この関数をヘルパー関数群に追加
+        // この関数をヘルパー関数群に追加
     function insertNewLine() {
         const insertY = cursorPosition.y + GRID_SIZE;
 
@@ -188,7 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(parsePosition)
             .filter(p => p && p.y >= insertY)
             .sort((a, b) => b.y - a.y || b.x - a.x); // 下の行から順に処理
-
         for (const pos of paperKeysToShift) {
             const oldKey = positionToKey(pos.x, pos.y);
             const newKey = positionToKey(pos.x, pos.y + GRID_SIZE);
@@ -231,7 +214,6 @@ document.addEventListener('DOMContentLoaded', () => {
         cursorPosition.x = 0;
         cursorPosition.y = insertY;
     }
-    // 【★修正★】文字オブジェクトを受け取るように変更
     function createCharCell(charObject, x, y, isComposingChar = false) {
         const charCell = document.createElement('div');
         charCell.className = 'char-cell';
