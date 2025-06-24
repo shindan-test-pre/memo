@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const svgLayer = document.getElementById('arrow-svg-layer');
     const helpModal = document.getElementById('help-modal');
     const closeHelpModalBtn = document.getElementById('close-help-modal');
+    const charCounter = document.getElementById('char-counter');
 
     // 隠し入力要素の作成
     const hiddenInput = document.createElement('input');
@@ -53,6 +54,15 @@ document.addEventListener('DOMContentLoaded', () => {
         charCell.style.top = `${y}px`;
         charCell.innerText = charObject.char === '\n' ? '' : charObject.char;
         container.appendChild(charCell);
+    }
+
+    // ★この関数を丸ごと追加
+    /** 文字数を計算して表示を更新する関数 */
+    function updateCharCount() {
+        // paperDataに保存されている文字の数をカウント
+        // ただし、改行は文字数に含めない
+        const count = Object.values(paperData).filter(data => data.char !== '\n').length;
+        charCounter.textContent = `文字数: ${count}`;
     }
 
     function getSelectionRect() { if (!selectionStart) return null; const x1 = Math.min(selectionStart.x, cursorPosition.x); const y1 = Math.min(selectionStart.y, cursorPosition.y); const x2 = Math.max(selectionStart.x, cursorPosition.x); const y2 = Math.max(selectionStart.y, cursorPosition.y); return { x: x1, y: y1, width: x2 - x1 + GRID_SIZE, height: y2 - y1 + GRID_SIZE }; }
@@ -232,6 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hiddenInput.style.top = `${cursorPosition.y}px`;
         if (currentMode === 'normal') { hiddenInput.focus({ preventScroll: true }); } else { container.focus({ preventScroll: true }); }
         updateCanvasSize();
+        updateCharCount();
     }
 
     // --- データ保存・読み込み関連 ---
