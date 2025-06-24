@@ -6,17 +6,16 @@ html, body {
     margin: 0;
 }
 body {
-    background-color: #f0f0f0; 
-    padding: 40px; 
-    /* overflow: hidden; を削除 */
+    background-color: #f0f0f0;
+    /* ★修正★ 上部にステータスバー用の余白を追加 */
+    padding: 70px 40px 40px 40px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans CJK JP", sans-serif;
     user-select: none;
 }
 #canvas-container {
     width: 100%;
-    min-height: 100%; /* 最低限の高さは維持 */
+    min-height: 100%;
     position: relative;
-    /* overflow: auto; を削除し、bodyのスクロールに任せる */
     cursor: text;
     background-color: #fdfdfd;
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -26,7 +25,6 @@ body {
     background-size: 20px 20px;
     border-radius: 4px;
     outline: none;
-    /* 【NEW】背景をコンテンツと一緒にスクロールさせる */
     background-attachment: local; 
 }
 #canvas-container:focus {
@@ -36,7 +34,6 @@ body {
     position: absolute;
     top: 0;
     left: 0;
-    /* サイズはJSで制御 */
     pointer-events: none;
     z-index: 7;
 }
@@ -99,8 +96,6 @@ body {
     z-index: 6;
     border-radius: 2px;
 }
-
-/* style.css の末尾に追加 */
 
 /* --- ヘルプモーダル関連のスタイル --- */
 .modal-overlay {
@@ -192,45 +187,6 @@ body {
 
 .help-grid dd {
     margin-left: 150px;
-
-/* style.css の末尾に追加 */
-
-/* --- 印刷/PDF書き出し用のスタイル --- */
-@media print {
-    /* ページの余白やヘッダー/フッターをリセット */
-    @page {
-        size: A4; /* 用紙サイズを指定 */
-        margin: 20mm; /* 余白を指定 */
-    }
-
-    body {
-        padding: 0;
-        background-color: #fff; /* 背景を白に */
-    }
-
-    /* 印刷に不要な要素を非表示にする */
-    .cursor,
-    .selection-highlight,
-    #help-modal {
-        display: none !important;
-    }
-
-    /* キャンバスの影を消す */
-    #canvas-container {
-        box-shadow: none;
-        border-radius: 0;
-        /* ページの区切りで中途半端に切れないようにする */
-        break-inside: avoid;
-    }
-    
-    /* 矢印の色をくっきりさせる */
-    .arrow-line {
-        stroke: #000;
-    }
-    path[fill="#333"] {
-        fill: #000;
-    }
-}
     color: #555;
     padding-bottom: 8px;
 }
@@ -239,3 +195,55 @@ body {
 .text-red { color: #D32F2F; }
 .text-green { color: #388E3C; }
 .text-blue { color: #1976D2; }
+
+
+/* --- 印刷/PDF書き出し用のスタイル --- */
+@media print {
+    @page {
+        size: A4;
+        margin: 20mm;
+    }
+    body {
+        padding: 0;
+        background-color: #fff;
+    }
+    /* ★修正★ ステータスバーも非表示に */
+    #status-bar,
+    .cursor,
+    .selection-highlight,
+    #help-modal {
+        display: none !important;
+    }
+    #canvas-container {
+        box-shadow: none;
+        border-radius: 0;
+        break-inside: avoid;
+    }
+    .arrow-line {
+        stroke: #000;
+    }
+    path[fill="#333"] {
+        fill: #000;
+    }
+}
+
+/* ★ここに追加★ ステータスバーと文字数カウンターのスタイル */
+#status-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 30px;
+    background-color: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    padding: 0 40px;
+    z-index: 999;
+}
+
+#char-counter {
+    font-size: 13px;
+    color: #495057;
+    font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+}
